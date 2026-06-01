@@ -1,0 +1,291 @@
+.rp-iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 45, 94, 0.12);
+  background: #ffffff;
+  color: #334155;
+  transition: 150ms ease;
+}
+.rp-iconBtn:hover {
+  background: rgba(29, 78, 216, 0.06);
+  border-color: rgba(29, 78, 216, 0.25);
+  color: #1d4ed8;
+}
+
+.rp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 45, 94, 0.12);
+  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.04));
+  color: #0f2d5e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rp-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 45, 94, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+.rp-cardCompact .rp-cardBody {
+  padding: 18px;
+}
+.rp-cardHeader {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(15, 45, 94, 0.08);
+  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.03));
+}
+.rp-cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rp-cardIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(29, 78, 216, 0.12);
+  color: #1d4ed8;
+  border: 1px solid rgba(29, 78, 216, 0.18);
+}
+.rp-cardHeader h2 {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+.rp-cardHeader p {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #64748b;
+}
+.rp-cardBody {
+  padding: 20px;
+}
+
+.rp-field {
+  min-width: 0;
+}
+.rp-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+  margin-bottom: 6px;
+}
+.rp-required {
+  color: #ef4444;
+  font-weight: 900;
+}
+.rp-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.rp-error {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.rp-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: #f8fafc;
+  color: #0f172a;
+  outline: none;
+  transition: 150ms ease;
+}
+.rp-input:focus {
+  background: #ffffff;
+  border-color: rgba(29, 78, 216, 0.55);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.18);
+}
+.rp-input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.rp-inputReadOnly {
+  background: linear-gradient(135deg, rgba(15, 45, 94, 0.05), rgba(26, 74, 138, 0.03));
+  border-color: rgba(15, 45, 94, 0.12);
+  color: #0f2d5e;
+  font-weight: 800;
+}
+
+.rp-kpiGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.rp-kpi {
+  border-radius: 16px;
+  border: 1px solid rgba(15, 45, 94, 0.1);
+  background: linear-gradient(180deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.03));
+  padding: 12px;
+}
+.rp-kpiLabel {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 800;
+}
+.rp-kpiValue {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 900;
+  color: #0f2d5e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+.rp-miniNote {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #64748b;
+}
+.rp-miniNoteStrong {
+  color: #0f2d5e;
+  font-weight: 800;
+}
+
+.rp-primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #ffffff;
+  border: 1px solid rgba(15, 45, 94, 0.35);
+  background: linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 55%, #1d4ed8 100%);
+  box-shadow: 0 10px 26px rgba(15, 45, 94, 0.22);
+  transition: 150ms ease;
+  flex: 1;
+  min-width: 220px;
+}
+.rp-primaryBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px rgba(15, 45, 94, 0.26);
+}
+
+.rp-ghostBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #0f2d5e;
+  border: 1px solid rgba(15, 45, 94, 0.16);
+  background: #ffffff;
+  transition: 150ms ease;
+}
+.rp-ghostBtn:hover {
+  background: rgba(29, 78, 216, 0.06);
+  border-color: rgba(29, 78, 216, 0.28);
+}
+
+.rp-secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #0f2d5e;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  transition: 150ms ease;
+  white-space: nowrap;
+}
+.rp-secondaryBtn:hover {
+  background: #ffffff;
+}
+
+.rp-successCard {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  border-radius: 18px;
+  padding: 16px;
+  border: 1px solid rgba(15, 45, 94, 0.25);
+  background: linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 55%, #1d4ed8 100%);
+  box-shadow: 0 16px 42px rgba(15, 45, 94, 0.26);
+}
+.rp-successIcon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  flex: 0 0 auto;
+}
+.rp-successMeta {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.rp-successChip {
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  min-width: 0;
+}
+.rp-successLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 900;
+}
+.rp-successValue {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #ffffff;
+  font-weight: 900;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .rp-successCard {
+    flex-direction: column;
+  }
+  .rp-successMeta {
+    grid-template-columns: 1fr;
+  }
+  .rp-kpiGrid {
+    grid-template-columns: 1fr;
+  }
+  .rp-primaryBtn {
+    min-width: 100%;
+  }
+}
+

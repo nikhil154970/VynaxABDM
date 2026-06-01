@@ -1,0 +1,430 @@
+.add-notes-container {
+  padding: px 8px 6px;
+  margin-top: -35px;
+ 
+  min-height: 0;
+  color: #0f172a;
+}
+
+.add-notes-card {
+  max-width: 1100px;
+  margin: 0 auto;
+  background: #ffffff;
+  border: 1px solid rgba(15, 45, 94, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.add-notes-card-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(15, 45, 94, 0.08);
+  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.03));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.add-notes-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.add-notes-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: #64748b;
+}
+
+.add-notes-ward-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 45, 94, 0.12);
+  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.04));
+  color: #0f2d5e;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.add-notes-card-body {
+  padding: 20px;
+}
+
+.add-notes-patient-banner {
+  margin-bottom: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 45, 94, 0.10);
+  background: linear-gradient(135deg, rgba(15, 45, 94, 0.05), rgba(26, 74, 138, 0.02));
+  padding: 12px 14px;
+}
+
+.add-notes-patient-name {
+  font-size: 14px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.add-notes-patient-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.add-notes-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.add-notes-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: #f8fafc;
+  color: #0f172a;
+  outline: none;
+  transition: 150ms ease;
+}
+
+.add-notes-input:focus {
+  background: #ffffff;
+  border-color: rgba(29, 78, 216, 0.55);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.18);
+}
+
+.add-notes-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: #f8fafc;
+  color: #0f172a;
+  outline: none;
+  transition: 150ms ease;
+  resize: vertical;
+}
+
+.add-notes-textarea:focus {
+  background: #ffffff;
+  border-color: rgba(29, 78, 216, 0.55);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.18);
+}
+
+.add-notes-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.add-notes-search {
+  padding: 14px;
+  border: 1px solid rgba(15, 45, 94, 0.08);
+  border-radius: 18px;
+  background: rgba(15, 45, 94, 0.02);
+}
+
+.add-notes-search-wrap {
+  position: relative;
+}
+
+.add-notes-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  background: #ffffff;
+  border: 1px solid rgba(15, 45, 94, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px -38px rgba(15, 23, 42, 0.55);
+  overflow: hidden;
+  z-index: 20;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.add-notes-dropdown-item {
+  width: 100%;
+  text-align: left;
+  padding: 12px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: 150ms ease;
+}
+
+.add-notes-dropdown-item:hover {
+  background: rgba(29, 78, 216, 0.05);
+}
+
+.add-notes-dropdown-name {
+  font-size: 13px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.add-notes-dropdown-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.60);
+}
+
+.add-notes-dropdown-empty {
+  padding: 14px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.add-notes-selected {
+  margin-top: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 45, 94, 0.10);
+  background: #ffffff;
+  padding: 12px;
+}
+
+.add-notes-selected-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.add-notes-selected-kv {
+  border: 1px solid rgba(15, 45, 94, 0.08);
+  border-radius: 14px;
+  padding: 10px 10px;
+  background: linear-gradient(135deg, rgba(15, 45, 94, 0.04), rgba(26, 74, 138, 0.02));
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.add-notes-selected-kv span {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.add-notes-selected-kv b {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.90);
+}
+
+.add-notes-empty-state {
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.add-notes-form {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(15, 45, 94, 0.08);
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.add-notes-form-disabled {
+  opacity: 0.7;
+}
+
+.add-notes-success {
+  border-radius: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(21, 128, 61, 0.18);
+  background: rgba(21, 128, 61, 0.10);
+  color: rgba(21, 128, 61, 0.95);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.add-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.add-notes-field {
+  min-width: 0;
+}
+
+.add-notes-quick {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.add-notes-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.add-notes-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 45, 94, 0.16);
+  background: transparent;
+  color: #0f2d5e;
+  font-weight: 900;
+  font-size: 12px;
+  cursor: pointer;
+  transition: 150ms ease;
+}
+
+.add-notes-btn:hover {
+  border-color: rgba(29, 78, 216, 0.30);
+  color: #1d4ed8;
+  box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.55);
+  transform: translateY(-1px);
+}
+
+.add-notes-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.add-notes-btn-primary {
+  border-color: rgba(29, 78, 216, 0.55);
+  color: #1d4ed8;
+}
+
+.add-notes-btn-secondary {
+  border-color: rgba(15, 45, 94, 0.16);
+  color: #0f2d5e;
+}
+
+.add-notes-btn-ghost {
+  border-color: transparent;
+  color: rgba(15, 23, 42, 0.72);
+}
+
+/* ================= MOBILE VIEW ================= */
+@media (max-width: 768px) {
+
+  .add-notes-container {
+    padding: 10px;
+    margin-top: 0;
+  }
+
+  .add-notes-card {
+    border-radius: 14px;
+  }
+
+  .add-notes-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .add-notes-ward-pill {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .add-notes-card-body {
+    padding: 14px;
+  }
+
+  /* GRID -> 1 column (form fields) */
+  .add-notes-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  /* SELECTED INFO GRID */
+  .add-notes-selected-row {
+    grid-template-columns: repeat(2, 1fr); /* 👈 2 column mobile */
+    gap: 8px;
+  }
+
+  .add-notes-selected-kv {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* INPUTS */
+  .add-notes-input,
+  .add-notes-textarea {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  /* BUTTONS */
+  .add-notes-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-notes-btn {
+    width: 100%;
+    height: 38px;
+  }
+
+  /* SEARCH DROPDOWN */
+  .add-notes-dropdown {
+    max-height: 220px;
+  }
+}
+
+
+/* ================= SMALL MOBILE ================= */
+@media (max-width: 480px) {
+
+  .add-notes-title {
+    font-size: 13px;
+  }
+
+  .add-notes-subtitle {
+    font-size: 11px;
+  }
+
+  .add-notes-patient-name {
+    font-size: 13px;
+  }
+
+  .add-notes-patient-sub {
+    font-size: 11px;
+  }
+
+  /* even tighter spacing */
+  .add-notes-card-body {
+    padding: 10px;
+  }
+
+  /* still keep 2 column but tighter */
+  .add-notes-selected-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .add-notes-selected-kv span {
+    font-size: 10px;
+  }
+
+  .add-notes-selected-kv b {
+    font-size: 11px;
+  }
+}
+

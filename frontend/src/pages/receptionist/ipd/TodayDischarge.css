@@ -1,0 +1,464 @@
+.today-discharge-container {
+  min-height: 0;
+  padding: 18px 18px 28px;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.today-discharge-container--detail {
+  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 45%, #f1f5f9 100%);
+}
+
+.today-discharge-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.today-discharge-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.today-discharge-titleBlock {
+  min-width: 0;
+}
+
+.today-discharge-kicker {
+  margin: 0 0 4px 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1d4ed8;
+}
+
+.today-discharge-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #111827;
+}
+
+.today-discharge-subtitle {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(15, 23, 42, 0.68);
+  font-weight: 400;
+  max-width: 640px;
+}
+
+.today-discharge-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #14532d;
+  background: rgba(220, 252, 231, 0.95);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  white-space: nowrap;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.today-discharge-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 45, 94, 0.1);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  transition: box-shadow 180ms ease;
+}
+
+.today-discharge-card:hover {
+  box-shadow: 0 16px 40px -24px rgba(15, 23, 42, 0.2);
+}
+
+.today-discharge-cardHeader {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(15, 45, 94, 0.08);
+  background:
+    radial-gradient(720px 200px at 12% 0%, rgba(29, 78, 216, 0.12), transparent 55%),
+    linear-gradient(135deg, rgba(15, 45, 94, 0.05), rgba(14, 165, 233, 0.04));
+}
+
+.today-discharge-cardTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.today-discharge-cardSub {
+  margin: 6px 0 0 0;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.today-discharge-empty {
+  padding: 36px 20px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.today-discharge-empty--detail {
+  border-bottom: 1px solid rgba(15, 45, 94, 0.08);
+}
+
+.today-discharge-tableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.today-discharge-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.today-discharge-table thead th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+  background: rgba(248, 250, 252, 0.95);
+  border-bottom: 1px solid rgba(15, 45, 94, 0.08);
+  white-space: nowrap;
+}
+
+.today-discharge-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  color: #334155;
+  vertical-align: middle;
+  transition: background 140ms ease;
+}
+
+.today-discharge-table tbody tr:hover td {
+  background: rgba(29, 78, 216, 0.04);
+}
+
+.today-discharge-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.today-discharge-td-strong {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.today-discharge-td-muted {
+  color: rgba(51, 65, 85, 0.88);
+  white-space: nowrap;
+}
+
+.today-discharge-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.today-discharge-sep {
+  opacity: 0.45;
+  font-weight: 600;
+}
+
+.today-discharge-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid rgba(29, 78, 216, 0.28);
+  background: linear-gradient(135deg, #1d4ed8, #0d6ebd);
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.22);
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+  white-space: nowrap;
+}
+
+.today-discharge-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+  box-shadow: 0 12px 26px rgba(29, 78, 216, 0.28);
+}
+
+.today-discharge-btn:active {
+  transform: translateY(0);
+}
+
+.today-discharge-btn--secondary {
+  margin: 14px 18px 18px;
+  background: #ffffff;
+  color: #1e40af;
+  box-shadow: none;
+}
+
+.today-discharge-btn--secondary:hover {
+  background: rgba(29, 78, 216, 0.06);
+}
+
+/* Detail page */
+.today-discharge-detail-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 40%, #f1f5f9 100%);
+  min-height: 100%;
+  border-radius: 0;
+  padding-bottom: 8px;
+}
+
+.today-discharge-back {
+  align-self: flex-start;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 45, 94, 0.12);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  color: #1d4ed8;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.today-discharge-back:hover {
+  background: rgba(29, 78, 216, 0.06);
+  border-color: rgba(29, 78, 216, 0.22);
+}
+
+.today-discharge-detail-card {
+  padding-bottom: 18px;
+}
+
+.today-discharge-stepHint {
+  margin: 0 0 6px 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #3b82f6;
+}
+
+.today-discharge-detail-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.today-discharge-detailGrid {
+  margin: 0;
+  padding: 16px 18px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+}
+
+.today-discharge-dt {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.today-discharge-dd {
+  margin: 4px 0 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.today-discharge-detailPlaceholder {
+  margin: 18px 18px 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px dashed rgba(15, 45, 94, 0.2);
+  background: rgba(15, 45, 94, 0.03);
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.65);
+  line-height: 1.45;
+}
+
+.today-discharge-detailActions {
+  padding: 16px 18px 18px;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.today-discharge-cardHeader--row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.today-discharge-btn--ghost {
+  background: #ffffff;
+  border: 1px solid rgba(15, 45, 94, 0.18);
+  color: #1d4ed8;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.today-discharge-btn--ghost:hover:not(:disabled) {
+  background: rgba(29, 78, 216, 0.06);
+}
+
+.today-discharge-btn--ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.today-discharge-empty--error {
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: rgba(254, 242, 242, 0.9);
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.today-discharge-bannerAlert {
+  margin: 0 18px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(220, 38, 38, 0.28);
+  background: linear-gradient(135deg, rgba(254, 242, 242, 0.95), #fff7f7);
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.today-discharge-clearanceGrid {
+  margin: 14px 18px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.today-discharge-clearCard {
+  border-radius: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(15, 45, 94, 0.12);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+
+.today-discharge-clearCard--ok {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.65) 0%, #ffffff 100%);
+}
+
+.today-discharge-clearCard--bad {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.5) 0%, #ffffff 100%);
+}
+
+.today-discharge-clearTitle {
+  margin: 0 0 6px 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1e3a8a;
+}
+
+.today-discharge-clearStatus {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.today-discharge-clearDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.today-discharge-clearDot--ok {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+}
+
+.today-discharge-clearDot--bad {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22);
+}
+
+.today-discharge-clearDetail {
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.today-discharge-blockList {
+  margin: 12px 18px 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  background: rgba(254, 242, 242, 0.55);
+}
+
+.today-discharge-blockList h3 {
+  margin: 0 0 10px 0;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #b91c1c;
+}
+
+.today-discharge-blockList ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7f1d1d;
+  line-height: 1.55;
+}
+
+.today-discharge-btn--muted {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .today-discharge-container {
+    padding: 12px 12px 22px;
+  }
+
+  .today-discharge-detailGrid {
+    grid-template-columns: 1fr;
+  }
+}

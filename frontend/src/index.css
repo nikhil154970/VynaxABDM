@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Sidebar: keep scroll, hide scrollbar for premium look */
+.sidebar-scroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge legacy */
+}
+.sidebar-scroll::-webkit-scrollbar {
+  display: none;
+}

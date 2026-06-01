@@ -1,0 +1,346 @@
+.bs-page {
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.bs-wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.bs-section {
+  background: #ffffff;
+  border: 1px solid rgba(15, 45, 94, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.bs-sectionHeader {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(15, 45, 94, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.03));
+}
+
+.bs-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.bs-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.bs-actionsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bs-btn {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 45, 94, 0.14);
+  background: #ffffff;
+  color: #0f2d5e;
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: 150ms ease;
+  cursor: pointer;
+}
+.bs-btn:hover {
+  background: rgba(29, 78, 216, 0.06);
+  border-color: rgba(29, 78, 216, 0.28);
+  color: #1d4ed8;
+}
+.bs-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bs-primaryBtn {
+  border: none;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 60%, #1d4ed8 100%);
+  box-shadow: 0 10px 22px rgba(15, 45, 94, 0.18);
+}
+.bs-primaryBtn:hover {
+  filter: brightness(1.02);
+}
+
+.bs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 16px;
+}
+@media (min-width: 980px) {
+  .bs-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.bs-kpi {
+  border: 1px solid rgba(15, 45, 94, 0.08);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 12px;
+}
+.bs-kpiTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bs-kpiIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(29, 78, 216, 0.10);
+  color: #1d4ed8;
+}
+.bs-kpiValue {
+  font-size: 20px;
+  font-weight: 900;
+  color: #0f172a;
+  line-height: 1.1;
+}
+.bs-kpiLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.bs-filterBar {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bs-search {
+  position: relative;
+  flex: 0 1 360px;
+  width: min(360px, 100%);
+  min-width: 240px;
+}
+.bs-search input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 36px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  outline: none;
+  transition: 150ms ease;
+}
+.bs-search input:focus {
+  background: #ffffff;
+  border-color: rgba(29, 78, 216, 0.55);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.18);
+}
+.bs-searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+}
+
+.bs-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bs-filterRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.bs-highlights {
+  padding: 0 16px 14px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 45, 94, 0.08);
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 900;
+  color: #334155;
+}
+.bs-pillDanger {
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.06);
+  color: #991b1b;
+}
+.bs-pillWarn {
+  border-color: rgba(234, 179, 8, 0.30);
+  background: rgba(234, 179, 8, 0.12);
+  color: #854d0e;
+}
+
+.bs-tableWrap {
+  overflow: hidden;
+}
+.bs-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.bs-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 900;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 10px;
+  background: #f8faff;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.bs-table td {
+  padding: 10px 10px;
+  border-top: 1px solid rgba(15, 45, 94, 0.06);
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.bs-row {
+  transition: 150ms ease;
+}
+.bs-row:hover {
+  background: rgba(29, 78, 216, 0.04);
+}
+
+.bs-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.bs-muted {
+  color: #64748b;
+  font-weight: 800;
+}
+
+.bs-empty {
+  padding: 44px 16px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.bs-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.bs-statusDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgba(15, 45, 94, 0.06);
+}
+.bs-statusDot--available {
+  background: #22c55e;
+}
+.bs-statusDot--occupied {
+  background: #ef4444;
+}
+.bs-statusDot--reserved {
+  background: #eab308;
+}
+
+.bs-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1;
+}
+
+.bs-statusText {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.bs-badgeAvailable {
+  background: #dcfce7;
+  color: #14532d;
+}
+.bs-badgeAvailable .bs-dot {
+  background: #22c55e;
+}
+.bs-badgeOccupied {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.bs-badgeOccupied .bs-dot {
+  background: #ef4444;
+}
+.bs-badgeReserved {
+  background: #fef9c3;
+  color: #854d0e;
+}
+.bs-badgeReserved .bs-dot {
+  background: #eab308;
+}
+
+.bs-rowActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

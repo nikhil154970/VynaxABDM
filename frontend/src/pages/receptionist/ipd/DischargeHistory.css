@@ -1,0 +1,434 @@
+.discharge-history-container {
+  min-height: 0;
+  padding: 18px 18px 28px;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.discharge-history-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.discharge-history-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.discharge-history-titleBlock {
+  min-width: 0;
+}
+
+.discharge-history-kicker {
+  margin: 0 0 4px 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1d4ed8;
+}
+
+.discharge-history-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.discharge-history-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.78);
+  background: rgba(15, 45, 94, 0.06);
+  border: 1px solid rgba(15, 45, 94, 0.12);
+  white-space: nowrap;
+}
+
+.discharge-history-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 12px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 45, 94, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+  min-width: 0;
+}
+
+.discharge-history-searchWrap {
+  flex: 0 0 200px;
+  width: 200px;
+  max-width: 200px;
+  min-width: 160px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.discharge-history-filters {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.discharge-history-filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.discharge-history-filterGroup--doctor {
+  flex: 0 0 168px;
+  width: 168px;
+  min-width: 140px;
+  max-width: 200px;
+}
+
+.discharge-history-filterLabel {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.discharge-history-dateInput {
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 45, 94, 0.14);
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  outline: none;
+  width: 132px;
+  min-width: 0;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.discharge-history-select {
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 45, 94, 0.14);
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  outline: none;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.discharge-history-dateInput:focus,
+.discharge-history-select:focus {
+  background: #ffffff;
+  border-color: rgba(29, 78, 216, 0.45);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+}
+
+.discharge-history-filterGroup:not(.discharge-history-filterGroup--doctor) {
+  flex-shrink: 0;
+}
+
+.discharge-history-clearBtn {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  color: #475569;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  align-self: flex-end;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.discharge-history-clearBtn:hover {
+  background: rgba(29, 78, 216, 0.06);
+  border-color: rgba(29, 78, 216, 0.22);
+  color: #1d4ed8;
+}
+
+.discharge-history-search {
+  width: 100%;
+  max-width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 45, 94, 0.14);
+  background: #ffffff;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.discharge-history-search:focus {
+  border-color: rgba(29, 78, 216, 0.45);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15);
+}
+
+.discharge-history-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 45, 94, 0.1);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.discharge-history-cardHeader {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(15, 45, 94, 0.08);
+  background:
+    radial-gradient(720px 200px at 12% 0%, rgba(29, 78, 216, 0.1), transparent 55%),
+    linear-gradient(135deg, rgba(15, 45, 94, 0.05), rgba(14, 165, 233, 0.04));
+}
+
+.discharge-history-cardTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.discharge-history-cardSub {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.discharge-history-empty {
+  padding: 36px 18px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.discharge-history-tableWrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.discharge-history-table {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.discharge-history-table thead th {
+  text-align: left;
+  padding: 12px 14px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+  background: rgba(248, 250, 252, 0.98);
+  border-bottom: 1px solid rgba(15, 45, 94, 0.1);
+  white-space: nowrap;
+}
+
+.discharge-history-thRight {
+  text-align: right;
+}
+
+.discharge-history-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  color: #334155;
+  vertical-align: middle;
+}
+
+.discharge-history-table tbody tr:hover td {
+  background: rgba(29, 78, 216, 0.04);
+}
+
+.discharge-history-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.discharge-history-tdStrong {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.discharge-history-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.discharge-history-sep {
+  opacity: 0.45;
+  font-weight: 600;
+}
+
+.discharge-history-tdNowrap {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.discharge-history-tdRight {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.discharge-history-tdPending {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.discharge-history-tdMuted {
+  font-size: 12px;
+  color: rgba(51, 65, 85, 0.88);
+}
+
+.discharge-history-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.discharge-history-badge--ok {
+  background: rgba(220, 252, 231, 0.95);
+  color: #14532d;
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.discharge-history-badge--dues {
+  background: rgba(254, 243, 199, 0.95);
+  color: #92400e;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+@media (max-width: 1100px) {
+  .discharge-history-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  .discharge-history-bar {
+    flex-direction: column;
+    align-items: stretch;
+    overflow-x: visible;
+    flex-wrap: wrap;
+  }
+
+  .discharge-history-searchWrap {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+  }
+
+  .discharge-history-filters {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .discharge-history-filterGroup--doctor {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+  }
+
+  .discharge-history-dateInput,
+  .discharge-history-select {
+    width: 100%;
+  }
+
+  .discharge-history-clearBtn {
+    align-self: stretch;
+  }
+}
+
+.discharge-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.discharge-history-actionBtn {
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(29, 78, 216, 0.35);
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.discharge-history-actionBtn:hover:not(:disabled) {
+  background: #dbeafe;
+}
+
+.discharge-history-actionBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.discharge-history-actionBtn--secondary {
+  background: #fff;
+  color: #334155;
+  border-color: rgba(15, 23, 42, 0.14);
+}
+
+.discharge-history-badge--type {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+@media (max-width: 768px) {
+  .discharge-history-container {
+    padding: 12px 12px 22px;
+  }
+}

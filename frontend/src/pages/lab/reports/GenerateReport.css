@@ -1,0 +1,310 @@
+.lab-reports-container { min-height: 100%; background: #f8fafc; }
+.lab-reports-page { padding: 18px 20px 28px; display: flex; flex-direction: column; gap: 14px; }
+.lab-reports-title { margin: 0; font-size: 20px; font-weight: 900; color: #0f172a; }
+.lab-reports-sub { margin: 6px 0 0; font-size: 12px; font-weight: 700; color: #64748b; }
+.lab-reports-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.lab-reports-label { font-size: 12px; font-weight: 800; color: #334155; }
+.lab-reports-input { border: 1px solid #dbe4ee; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 700; }
+.lab-reports-tableWrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: auto; }
+.lab-reports-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.lab-reports-table th, .lab-reports-table td { border-bottom: 1px solid #eef2f7; padding: 10px 12px; text-align: left; font-size: 12px; }
+.lab-reports-table th { font-size: 11px; text-transform: uppercase; color: #64748b; }
+.lab-reports-row { cursor: pointer; }
+.lab-reports-row:hover { background: #f8fafc; }
+.lab-reports-empty { text-align: center; color: #94a3b8; font-weight: 700; }
+
+/* ── Modal Overlay ── */
+.lab-reports-modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 999;
+}
+.lab-reports-modal {
+  width: min(860px, 100%);
+  max-height: 92vh;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #c8d0db;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.22);
+  display: flex;
+  flex-direction: column;
+  font-family: "Times New Roman", Times, serif;
+}
+
+/* ══════════════════════════════════════════════
+   HEADER — exact match to printed slip image
+   ══════════════════════════════════════════════ */
+.lab-reports-reportHeader {
+  display: flex;
+  align-items: stretch;
+  min-height: 80px;
+  flex-shrink: 0;
+  border-bottom: 3px solid #1a3a6b;
+}
+
+/* Left navy section */
+.lab-reports-reportHeader-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #1a3a6b 0%, #0d2347 100%);
+}
+
+/* Circular logo */
+.lab-reports-reportHeader-logo {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #f5b800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.lab-reports-reportHeader-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Hospital name + address */
+.lab-reports-reportHeader-hospitalInfo {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.lab-reports-reportHeader-hospitalName {
+  font-size: 26px;
+  font-weight: 900;
+  color: #fff;
+  font-family: Georgia, serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  line-height: 1.05;
+}
+.lab-reports-reportHeader-hospitalSub {
+  font-size: 9.5px;
+  color: #b8cce8;
+  line-height: 1.5;
+  font-family: Arial, sans-serif;
+}
+
+/* Right yellow panel */
+.lab-reports-reportHeader-right {
+  flex: 0 0 210px;
+  background: #f5b800;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 14px;
+  text-align: center;
+  position: relative;
+  clip-path: none;
+}
+.lab-reports-reportHeader-regNo {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 9px;
+  font-weight: 800;
+  color: #3a1e00;
+  letter-spacing: 0.5px;
+  font-family: Arial, sans-serif;
+}
+.lab-reports-reportHeader-drName {
+  font-size: 17px;
+  font-weight: 900;
+  color: #1a1a1a;
+  font-family: Georgia, serif;
+  line-height: 1.15;
+  margin-top: 10px;
+}
+.lab-reports-reportHeader-drDeg {
+  font-size: 11px;
+  font-weight: 700;
+  color: #3a1e00;
+  margin-top: 3px;
+  font-family: Arial, sans-serif;
+}
+
+/* ── Close Bar ── */
+.lab-reports-modalTopBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.lab-reports-modalTopBar h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-family: Arial, sans-serif;
+}
+.lab-reports-modalTopBar button {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #64748b;
+  font-family: Arial, sans-serif;
+}
+.lab-reports-modalTopBar button:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+
+/* ── Modal Body ── */
+.lab-reports-modalBody {
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+  flex: 1;
+  font-family: "Times New Roman", Times, serif;
+}
+
+/* Patient Meta Table — matches printed slip exactly */
+.lab-reports-metaTable {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #555;
+  font-size: 11.5px;
+  margin-bottom: 10px;
+}
+.lab-reports-metaTable td {
+  border: 1px solid #555;
+  padding: 3px 7px;
+  vertical-align: middle;
+}
+.lab-reports-metaTable .meta-label {
+  font-weight: 700;
+  background: #fff;
+  width: 17%;
+  color: #111;
+  white-space: nowrap;
+}
+.lab-reports-metaTable .meta-value {
+  width: 28%;
+  color: #111;
+}
+
+/* Section heading — bordered box, centered, bold underline like image */
+.lab-reports-sectionHeading {
+  border: 2px solid #111;
+  text-align: center;
+  font-weight: 900;
+  padding: 5px 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  margin: 10px 0 4px;
+  letter-spacing: 1px;
+  background: #fff;
+  color: #0f172a;
+  text-decoration: underline;
+}
+.lab-reports-subSection {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin: 6px 0 4px;
+  color: #1e40af;
+  font-family: Arial, sans-serif;
+}
+
+/* Intro blurb — small justified text below results */
+.lab-reports-introBlurb {
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: justify;
+  color: #222;
+  margin: 8px 0 0;
+  hyphens: auto;
+}
+
+/* Results plain rows */
+.lab-reports-plainResults { margin-top: 4px; }
+.lab-reports-plainResultsHeader {
+  display: flex;
+  padding: 5px 4px;
+  border-top: 1.5px solid #111;
+  border-bottom: 1.5px solid #111;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #111;
+  background: #fff;
+}
+.lab-reports-plainRow {
+  display: flex;
+  padding: 4px 4px;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 11.5px;
+  color: #0f172a;
+}
+.lab-reports-plainRow:last-child { border-bottom: none; }
+
+.lab-reports-plainSubHeading {
+  padding: 5px 4px;
+  font-weight: 900;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #0d2347;
+  border-bottom: 1px solid #333;
+  margin-top: 8px;
+}
+
+/* Column widths — matching printed slip */
+.prh-investigation, .prr-investigation { flex: 3; }
+.prh-result,        .prr-result        { flex: 1.1; font-weight: 700; }
+.prh-unit,          .prr-unit          { flex: 1.4; }
+.prh-range,         .prr-range         { flex: 1.5; }
+
+.lab-reports-remarks {
+  margin-top: 10px;
+  font-size: 10px;
+  line-height: 1.55;
+  color: #374151;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 6px;
+}
+
+/* ── Actions ── */
+.lab-reports-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #eef2f7;
+  background: #f8fafc;
+  flex-shrink: 0;
+  font-family: Arial, sans-serif;
+}
+.lab-reports-actions button {
+  border: 1px solid #dbe4ee;
+  background: #fff;
+  border-radius: 10px;
+  padding: 7px 13px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  color: #334155;
+  transition: all 0.15s;
+}
+.lab-reports-actions button:hover { background: #1a3a6b; color: #fff; border-color: #1a3a6b; }
+.lab-reports-actions button:last-child { background: #1a3a6b; color: #fff; border-color: #1a3a6b; }
+.lab-reports-actions button:last-child:hover { background: #0f2550; }
