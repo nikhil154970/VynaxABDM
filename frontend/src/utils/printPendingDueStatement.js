@@ -1,3 +1,5 @@
+import { HOSPITAL_NAME_DISPLAY } from './hospitalBranding';
+
 function formatMoney(n) {
   const x = Math.max(0, Number(n) || 0);
   return `₹${x.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -23,7 +25,7 @@ export function printPendingDueStatement(row) {
   .pending { color: #be123c; font-weight: bold; }
   .footer { margin-top: 24px; font-size: 11px; color: #64748b; }
 </style></head><body>
-  <h1>New H T Hospital — Pharmacy Due Statement</h1>
+  <h1>${HOSPITAL_NAME_DISPLAY} — Pharmacy Due Statement</h1>
   <p class="sub">Generated ${new Date().toLocaleString('en-IN')}</p>
   <table>
     <tr><th>Patient Name</th><td>${row.patientName || '—'}</td></tr>

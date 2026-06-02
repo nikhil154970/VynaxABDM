@@ -398,7 +398,7 @@ export default function PatientList() {
         </head>
         <body>
           <div class="card">
-            <p class="title">New H T Hospital — Patient Registration Slip</p>
+            <p class="title">New H.T. Hospital — Patient Registration Slip</p>
             <p class="sub">Please keep this slip for your visit.</p>
             ${patient?.sponsor === 'AYUSHMAN' ? '<p class="sub"><b>Patient Type:</b> Ayushman &nbsp;|&nbsp; <b>Sponsor:</b> Ayushman</p>' : ''}
             <div class="grid">

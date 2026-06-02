@@ -1,3 +1,5 @@
+import { HOSPITAL_NAME_DISPLAY, HOSPITAL_NAME_HI } from './hospitalBranding';
+
 function safeText(v) {
   const s = v == null ? '' : String(v);
   return s.replace(/[<>&]/g, (ch) => (ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : '&amp;'));
@@ -17,7 +19,7 @@ function fmtDateTime(v) {
 }
 
 /**
- * Printable IPD discharge summary (New H T Hospital branding — matches discharge slip header).
+ * Printable IPD discharge summary (New H.T. Hospital branding — matches discharge slip header).
  * @param {{ admission: object, dischargeRequestedAt?: string|null }} opts
  */
 export function printDischargeSummary({ admission, dischargeRequestedAt }) {
@@ -57,7 +59,7 @@ export function printDischargeSummary({ admission, dischargeRequestedAt }) {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Discharge Summary — New H T Hospital</title>
+  <title>Discharge Summary — ${HOSPITAL_NAME_DISPLAY}</title>
   <style>
     body { font-family: Georgia, 'Times New Roman', serif; margin: 0; padding: 12px; font-size: 13px; color: #0f172a;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -88,8 +90,8 @@ export function printDischargeSummary({ admission, dischargeRequestedAt }) {
   <div class="wrap">
     <div class="opd-header">
       <div class="header-text">
-        <h1>नैतिक हॉस्पिटल</h1>
-        <div class="sub">New H T Hospital — IPD Discharge Summary</div>
+        <h1>${HOSPITAL_NAME_HI}</h1>
+        <div class="sub">${HOSPITAL_NAME_DISPLAY} — IPD Discharge Summary</div>
       </div>
     </div>
     <div class="title">DISCHARGE SUMMARY / सारांश</div>

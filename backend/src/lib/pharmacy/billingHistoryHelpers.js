@@ -1,4 +1,5 @@
 const { toNum, roundMoney } = require('./billingHelpers');
+const { getHospitalPrintMeta } = require('../hospitalBranding');
 const { resolvePatientType, patientTypeLabel } = require('./pendingDuesHelpers');
 
 const STATUS_LABELS = {
@@ -164,13 +165,7 @@ function mapPaymentRow(row, userMap = {}) {
 
 function buildPrintData(bill, items) {
   return {
-    hospital: {
-      nameEn: 'NEW H T HOSPITAL',
-      nameHi: 'नैतिक हॉस्पिटल एण्ड सर्जिकल सेन्टर',
-      address: 'ANAND BIHAR COLONY, BHIKHARIPUR BLW, VARANASI, U.P - 221004',
-      phone: '+91 91409 78130',
-      email: 'naitikhospital@gmail.com',
-    },
+    hospital: getHospitalPrintMeta(),
     billNumber: bill.billNumber,
     billDate: bill.createdAt,
     billingType: bill.billingType === 'WALK_IN' ? 'Walk-in Customer' : 'Hospital Patient',

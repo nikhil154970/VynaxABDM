@@ -310,7 +310,7 @@ export default function ConsultationHistory() {
         th,td{border:1px solid #e2e8f0;padding:8px;text-align:left;}
         th{background:#f8fafc;}
       </style></head><body>
-        <h1>New H T Hospital — Prescription</h1>
+        <h1>New H.T. Hospital — Prescription</h1>
         <p><strong>${patient?.name || 'Patient'}</strong> · UHID ${patient?.uhid || '—'} · ${formatDate(c.date)}</p>
         <p>Dr. ${c.doctor} · ${c.department}</p>
         <table><thead><tr><th>Medicine</th><th>Dosage</th><th>Duration</th><th>Mode</th></tr></thead><tbody>${meds}</tbody></table>

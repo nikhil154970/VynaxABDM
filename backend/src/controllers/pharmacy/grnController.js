@@ -1,4 +1,5 @@
 const { prisma } = require('../../config/prisma');
+const { getHospitalPrintMeta } = require('../../lib/hospitalBranding');
 const { GRN_STATUSES, PO_FOR_GRN, ALLOWED_GST } = require('../../lib/pharmacy/constants');
 const {
   normalizeString,
@@ -666,13 +667,7 @@ function formatPoDate(v) {
 async function buildPrintPayload(grn) {
   const supplier = grn.supplier;
   return {
-    hospital: {
-      nameEn: 'NEW H T HOSPITAL',
-      nameHi: 'नैतिक हॉस्पिटल एण्ड सर्जिकल सेन्टर',
-      address: 'ANAND BIHAR COLONY, BHIKHARIPUR BLW, VARANASI, U.P - 221004',
-      phone: '+91 91409 78130',
-      email: 'naitikhospital@gmail.com',
-    },
+    hospital: getHospitalPrintMeta(),
     grnNumber: grn.grnNumber,
     poNumber: grn.poNumber,
     status: grn.status,

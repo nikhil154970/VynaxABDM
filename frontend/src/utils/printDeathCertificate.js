@@ -1,3 +1,5 @@
+import { HOSPITAL_NAME_DISPLAY, HOSPITAL_NAME_EN } from './hospitalBranding';
+
 function safeText(v) {
   const s = v == null ? '' : String(v);
   return s.replace(/[<>&]/g, (ch) => (ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : '&amp;'));
@@ -105,10 +107,10 @@ export function printDeathCertificate({ summary } = {}) {
   <div class="hdr">
     <div class="logo-area">
       <div class="logo-box">
-        <img src="/hopital_logo.png" alt="New H T Hospital" onerror="this.style.display='none'" />
+        <img src="/hopital_logo.png" alt="${HOSPITAL_NAME_DISPLAY}" onerror="this.style.display='none'" />
       </div>
       <div class="hosp-info">
-        <div class="name">NEW H T HOSPITAL</div>
+        <div class="name">${HOSPITAL_NAME_EN}</div>
         <div class="addr">ANAND BIHAR COLONY BHIKHARIPUR BLW, VARANASI, UP<br>Phone: +91 75410 31287 | 9559988876<br>www.newhthospital.com</div>
       </div>
     </div>

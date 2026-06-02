@@ -1,3 +1,5 @@
+import { HOSPITAL_NAME_EN } from './hospitalBranding';
+
 /**
  * Formal  HTML — S.D. Pathology header (unchanged) with inner layout
  * matching multi-page pathology PDFs: consulting block, patient meta + page x/y,
@@ -583,7 +585,7 @@ function buildCategorySheetHtml(report, pageDef, pageIndex, totalPages, addPageB
           </tr>
           <tr>
             <td class="lbl">Ref by Dr</td>
-            <td class="val">:${escapeHtml(report.doctorName || 'NEW H T HOSPITAL')}</td>
+            <td class="val">:${escapeHtml(report.doctorName || HOSPITAL_NAME_EN)}</td>
             <td class="lbl">Given Time</td>
             <td class="val">: ${escapeHtml(givenTime)}</td>
           </tr>

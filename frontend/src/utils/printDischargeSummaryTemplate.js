@@ -1,4 +1,5 @@
 import { parseAdmissionDateTimeForPrint } from '../pages/receptionist/ipd/dischargeFormBuilders';
+import { HOSPITAL_NAME_DISPLAY } from './hospitalBranding';
 
 function safeText(v) {
   const s = v == null ? '' : String(v);
@@ -136,7 +137,7 @@ export function printDischargeSummaryTemplate({ summary, billing = null, admissi
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Discharge Summary - New H T Hospital</title>
+  <title>Discharge Summary - ${HOSPITAL_NAME_DISPLAY}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
@@ -321,7 +322,7 @@ export function printDischargeSummaryTemplate({ summary, billing = null, admissi
   <div class="print-container">
     <div class="header">
       <div class="header-logo">
-        <img src="/hopital_logo.png" alt="New H T Hospital" onerror="this.style.display='none'" />
+        <img src="/hopital_logo.png" alt="${HOSPITAL_NAME_DISPLAY}" onerror="this.style.display='none'" />
       </div>
       <div class="header-center">
         <div class="hospital-name">DISCHARGE SUMMARY</div>
@@ -468,7 +469,7 @@ export function printDischargeSummaryTemplate({ summary, billing = null, admissi
       </tr>
       ` : ''}
     </table>
-    <div class="footer-thanks">Thank you for choosing New H T Hospital. Wishing you a speedy recovery.</div>
+    <div class="footer-thanks">Thank you for choosing ${HOSPITAL_NAME_DISPLAY}. Wishing you a speedy recovery.</div>
   </div>
 </div>
 
@@ -477,7 +478,7 @@ export function printDischargeSummaryTemplate({ summary, billing = null, admissi
   <div class="print-container">
     <div class="header">
       <div class="header-logo">
-        <img src="/hopital_logo.png" alt="New H T Hospital" onerror="this.style.display='none'" />
+        <img src="/hopital_logo.png" alt="${HOSPITAL_NAME_DISPLAY}" onerror="this.style.display='none'" />
       </div>
       <div class="header-center">
         <div class="hospital-name">DISCHARGE SUMMARY</div>
@@ -581,7 +582,7 @@ export function printDischargeSummaryTemplate({ summary, billing = null, admissi
         <td colspan="2" class="discharge-dt-cell">${safeText(fmtDateOnly(dischargeDT))} ${safeText(fmtTimeOnly(dischargeDT))}</td>
       </tr>
     </table>
-    <div class="footer-thanks">Thank you for choosing New H T Hospital. Wishing you a speedy recovery.</div>
+    <div class="footer-thanks">Thank you for choosing ${HOSPITAL_NAME_DISPLAY}. Wishing you a speedy recovery.</div>
   </div>
 </div>
 

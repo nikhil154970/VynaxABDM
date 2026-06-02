@@ -632,7 +632,7 @@ export default function SearchPatient() {
                           </head>
                           <body>
                             <div class="card">
-                              <p class="title">New H T Hospital — Billing Receipt</p>
+                              <p class="title">New H.T. Hospital — Billing Receipt</p>
                               <p class="sub">Patient: ${selected.name} · UHID: ${selected.uhid}</p>
                               ${selected.sponsor === 'AYUSHMAN' ? '<p class="sub"><b>Patient Type:</b> Ayushman &nbsp;|&nbsp; <b>Sponsor:</b> Ayushman</p>' : ''}
                               <div class="grid">

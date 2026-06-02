@@ -402,7 +402,7 @@ export default function GenerateReport() {
                   </tr>
                   <tr>
                     <td className="meta-label">Ref by Dr</td>
-                    <td className="meta-value">:{activeReport.doctorName || 'NEW H T HOSPITAL'}</td>
+                    <td className="meta-value">:{activeReport.doctorName || 'NEW H.T. HOSPITAL'}</td>
                     <td className="meta-label">Given Time</td>
                     <td className="meta-value">: {formatTimeOnly(activeReport.sampleCollectionTime || activeReport.date)}</td>
                   </tr>

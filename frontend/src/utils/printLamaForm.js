@@ -1,3 +1,5 @@
+import { HOSPITAL_NAME_DISPLAY, HOSPITAL_NAME_EN } from './hospitalBranding';
+
 function safeText(v) {
   const s = v == null ? '' : String(v);
   return s.replace(/[<>&]/g, (ch) => (ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : '&amp;'));
@@ -65,10 +67,10 @@ function slipHeaderHTML({ showNote = true } = {}) {
   return `
       <div class="slip-hdr">
         <div class="slip-hdr-logo">
-          <img src="/hopital_logo.png" alt="New H T Hospital" onerror="this.style.display='none'" />
+          <img src="/hopital_logo.png" alt="${HOSPITAL_NAME_DISPLAY}" onerror="this.style.display='none'" />
         </div>
         <div class="slip-hdr-center">
-          <div class="slip-hdr-hospital">NEW H T HOSPITAL</div>
+          <div class="slip-hdr-hospital">${HOSPITAL_NAME_EN}</div>
           <div class="slip-hdr-addr">ANAND BIHAR COLONY BHIKHARIPUR BLW, VARANASI, UP</div>
           <div class="slip-hdr-title">LEAVE AGAINST MEDICAL ADVICE (LAMA)</div>
         </div>
@@ -229,7 +231,7 @@ export function printLamaForm({ summary } = {}) {
   }
 
   const html = `<!doctype html>
-<html><head><meta charset="utf-8"/><title>LAMA New H T Hospital</title>
+<html><head><meta charset="utf-8"/><title>LAMA ${HOSPITAL_NAME_DISPLAY}</title>
 <style>${PRINT_STYLES}</style></head><body>
 ${buildSlipHTML(f)}
 <script>window.onload = function () { window.focus(); window.print(); };<\/script>

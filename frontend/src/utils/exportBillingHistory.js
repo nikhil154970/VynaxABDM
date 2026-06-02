@@ -1,3 +1,5 @@
+import { HOSPITAL_NAME_DISPLAY } from './hospitalBranding';
+
 function formatMoney(n) {
   const x = Math.max(0, Number(n) || 0);
   return `₹${x.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -110,7 +112,7 @@ export function exportBillingHistoryPdf(rows) {
     th, td { border: 1px solid #e2e8f0; padding: 6px; text-align: left; }
     th { background: #f1f5f9; }
   </style></head><body>
-  <h1>New H T Hospital — Pharmacy Billing History</h1>
+  <h1>${HOSPITAL_NAME_DISPLAY} — Pharmacy Billing History</h1>
   <p>Generated ${new Date().toLocaleString('en-IN')}</p>
   <table>
     <thead><tr><th>Bill No</th><th>Patient</th><th>UHID</th><th>Amount</th><th>Status</th></tr></thead>

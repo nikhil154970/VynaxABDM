@@ -2,6 +2,7 @@
  * Purchase Order print — professional A4 layout (data from GET /pharmacy/purchase-orders/:id/print).
  */
 import api from './api';
+import { HOSPITAL_NAME_DISPLAY } from './hospitalBranding';
 
 function safeText(v) {
   const s = v == null ? '' : String(v);
@@ -314,7 +315,7 @@ export async function printPurchaseOrder(orderId) {
 
     <div class="header">
       <div class="logo-box">
-        <img src="/hopital_logo.png" alt="New H T Hospital" />
+        <img src="/hopital_logo.png" alt="${HOSPITAL_NAME_DISPLAY}" />
       </div>
       <div class="header-center">
         <div class="hi">${safeText(d.hospital?.nameHi)}</div>

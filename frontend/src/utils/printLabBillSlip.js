@@ -5,6 +5,7 @@
 
 import { isAyushmanSponsor, slipSponsorBannerHtml, AYUSHMAN_PAYMENT_LABEL } from './ayushmanBilling';
 import { hospitalMobileSlipHtml } from './hospitalContact';
+import { printSlipHeaderTextHtml } from './hospitalBranding';
 
 function safeText(v) {
   const s = v == null ? '' : String(v);
@@ -237,10 +238,7 @@ export function printLabBillSlip(p) {
         <img src="/hopital_logo.png" alt="NH" />
       </div>
 
-      <div class="header-text">
-        <h1>नैतिक हॉस्पिटल</h1>
-        <div class="sub">एण्ड सर्जिकल सेन्टर</div>
-        <div class="addr">ANAND BIHAR COLONY BHIKHARIPUR BLW, VARANASI, UP</div>
+      <div class="header-text">${printSlipHeaderTextHtml()}
       </div>
     </div>
 

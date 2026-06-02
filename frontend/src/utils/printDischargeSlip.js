@@ -1,3 +1,9 @@
+import {
+  HOSPITAL_ADDRESS_LINE,
+  HOSPITAL_NAME_DISPLAY,
+  HOSPITAL_NAME_HI,
+} from './hospitalBranding';
+
 function safeText(v) {
   const s = v == null ? '' : String(v);
   return s.replace(/[<>&]/g, (ch) => (ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : '&amp;'));
@@ -24,7 +30,7 @@ function fmtDateTime(v) {
 import { isAyushmanSponsor, slipSponsorBannerHtml, AYUSHMAN_PAYMENT_LABEL } from './ayushmanBilling';
 
 /**
- * Opens print dialog with IPD discharge slip (New H T Hospital branding).
+ * Opens print dialog with IPD discharge slip (New H.T. Hospital branding).
  * @param {{ patient: object }} opts — patient should include billing, lineItems, dischargeStatus, dischargedAt, etc.
  */
 export function printDischargeSlip({ patient }) {
@@ -55,7 +61,7 @@ export function printDischargeSlip({ patient }) {
   <html>
   <head>
     <meta charset="utf-8" />
-    <title>Discharge Slip — New H T Hospital</title>
+    <title>Discharge Slip — ${HOSPITAL_NAME_DISPLAY}</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -135,12 +141,12 @@ export function printDischargeSlip({ patient }) {
     <div class="slip">
       <div class="opd-header">
         <div class="logo-box">
-          <img src="/hopital_logo.png" alt="New H T Hospital" onerror="this.style.display='none'" />
+          <img src="/hopital_logo.png" alt="${HOSPITAL_NAME_DISPLAY}" onerror="this.style.display='none'" />
         </div>
         <div class="header-text">
-          <h1>नैतिक हॉस्पिटल</h1>
-          <div class="sub">New H T Hospital — Discharge slip</div>
-          <div class="addr">ANAND BIHAR COLONY BHIKHARIPUR BLW, VARANASI, UP</div>
+          <h1>${HOSPITAL_NAME_HI}</h1>
+          <div class="sub">${HOSPITAL_NAME_DISPLAY} — Discharge slip</div>
+          <div class="addr">${HOSPITAL_ADDRESS_LINE}</div>
         </div>
       </div>
       <div class="title-row">IPD FINAL DISCHARGE / बिल सारांश</div>
@@ -173,7 +179,7 @@ export function printDischargeSlip({ patient }) {
       </table>
       <div class="footer">
         This is a computer-generated discharge summary slip for patient records. Please settle pending dues as per hospital policy.
-        <br />धन्यवाद — Thank you for choosing New H T Hospital.
+        <br />धन्यवाद — Thank you for choosing ${HOSPITAL_NAME_DISPLAY}.
       </div>
     </div>
     <script>window.onload = function () { window.print(); };</script>
