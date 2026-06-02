@@ -15,12 +15,7 @@ import {
 import './Login.css';
 
 const ROLES = [
-  { value: 'super_admin',    label: 'Admin'         },
-  { value: 'doctor',         label: 'Doctor'        },
-  { value: 'nurse',          label: 'Nurse'         },
-  { value: 'receptionist',   label: 'Receptionist'  },
-  { value: 'lab_technician', label: 'Lab Technician'},
-  { value: 'pharmacist',     label: 'Pharmacy'      },
+  { value: 'pharmacist', label: 'Pharmacy' },
 ];
 
 const toBackendRole = (role) => (role ? role.toUpperCase() : role);
