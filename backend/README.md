@@ -1,4 +1,4 @@
-# Backend (New H T Hospital)
+# Backend (VyanX Hospital Management System)
 
 ## Setup
 

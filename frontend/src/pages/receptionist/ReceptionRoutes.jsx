@@ -18,6 +18,7 @@ import ActiveIPDPatients from './ipd/ActiveIPDPatients';
 import AdmitPatient from './ipd/AdmitPatient';
 import TransferPatient from './ipd/TransferPatient';
 import TransferHistory from './ipd/TransferHistory';
+import RecoveryTransferRequests from './RecoveryTransferRequests';
 
 import BedStatus from './beds/BedStatus';
 import LiveBedTracker from './beds/AllocateBed';
@@ -26,6 +27,9 @@ import AllBills from './billing/AllBills';
 import GenerateBilling from './billing/GenerateBilling';
 import Payments from './billing/Payments';
 import PaymentDue from './billing/PaymentDue';
+import OtRequests from './OtRequests';
+import ApprovedForOT from './ApprovedForOT';
+import GenerateOTBill from './GenerateOTBill';
 
 import PendingActions from './notifications/PendingActions';
 import Alerts from './notifications/Alerts';
@@ -37,9 +41,7 @@ import AllLabBills from './lab/AllLabBills';
 
 import TodayDischarge from './ipd/TodayDischarge';
 import DischargeProcessDetail from './ipd/DischargeProcessDetail';
-import DischargeDocuments from './ipd/DischargeDocuments';
 import DischargeSummaryEditor from './ipd/DischargeSummaryEditor';
-import FinalDischarge from './ipd/FinalDischarge';
 import DischargeHistory from './ipd/DischargeHistory';
 
 import Profile from './Profile';
@@ -80,13 +82,15 @@ export default function ReceptionRoutes() {
         <Route path="ipd" element={<ActiveIPDPatients />} />
         <Route path="ipd/admit" element={<AdmitPatient />} />
         <Route path="ipd/transfers" element={<TransferPatient />} />
+        <Route path="ipd/recovery-transfers" element={<RecoveryTransferRequests />} />
         <Route path="ipd/transfers/history" element={<TransferHistory />} />
         <Route path="ipd/today-discharge" element={<TodayDischarge />} />
         <Route path="ipd/discharge/history" element={<DischargeHistory />} />
         <Route path="ipd/discharge/process/:id" element={<DischargeProcessDetail />} />
-        <Route path="ipd/discharge/documents/:id" element={<DischargeDocuments />} />
         <Route path="ipd/discharge/summary/:id" element={<DischargeSummaryEditor />} />
-        <Route path="ipd/discharge/final/:id" element={<FinalDischarge />} />
+        {/* Legacy document/final-discharge steps removed — redirect to the single review page */}
+        <Route path="ipd/discharge/documents/:id" element={<Navigate to="/dashboard/reception/ipd/today-discharge" replace />} />
+        <Route path="ipd/discharge/final/:id" element={<Navigate to="/dashboard/reception/ipd/today-discharge" replace />} />
 
 
         {/* Bed Management */}
@@ -100,6 +104,11 @@ export default function ReceptionRoutes() {
         <Route path="billing/generate" element={<GenerateBilling />} />
         <Route path="billing/payments" element={<Payments />} />
         <Route path="billing/dues" element={<PaymentDue />} />
+
+        {/* OT Requests */}
+        <Route path="ot-requests" element={<OtRequests />} />
+        <Route path="ot-requests/generate-bill" element={<GenerateOTBill />} />
+        <Route path="ot-requests/approved" element={<ApprovedForOT />} />
 
         {/* Notifications */}
         <Route path="notifications/pending" element={<PendingActions />} />

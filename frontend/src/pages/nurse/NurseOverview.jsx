@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MdPeople, MdWarning, MdCheckCircle, MdNotes } from 'react-icons/md';
+import { MdPeople, MdWarning, MdCheckCircle, MdNotes, MdLocalHospital, MdSchedule } from 'react-icons/md';
 import api from '../../utils/api';
 import { admissionIdFromRow } from '../../utils/admissionId';
 import './NurseOverview.css';
@@ -31,16 +31,22 @@ export default function NurseOverview() {
 
   const [patients, setPatients] = useState([]);
   const [recentNotes, setRecentNotes] = useState([]);
+  const [duty, setDuty] = useState(null);
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const [pa, no] = await Promise.all([api.get('/nurse/ipd/assigned'), api.get('/nurse/recent-notes')]);
+        const [pa, no, dy] = await Promise.all([
+          api.get('/nurse/ipd/assigned'),
+          api.get('/nurse/recent-notes'),
+          api.get('/nurse/my-duty').catch(() => ({ data: { duty: null } })),
+        ]);
         if (!alive) return;
         setPatients(Array.isArray(pa.data?.items) ? pa.data.items : []);
         setRecentNotes(Array.isArray(no.data?.items) ? no.data.items : []);
+        setDuty(dy.data?.duty || null);
         setLoadError('');
       } catch (e) {
         if (!alive) return;
@@ -81,6 +87,36 @@ export default function NurseOverview() {
         <div className="nurse-overview-top" />
 
         {loadError ? <div className="nurse-overview-empty">{loadError}</div> : null}
+
+        {/* Today's Duty Banner */}
+        {duty && (
+          <div className="nurse-overview-duty-banner" style={{
+            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            borderRadius: 16,
+            padding: '16px 20px',
+            marginBottom: 20,
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <MdLocalHospital size={28} />
+              <div>
+                <div style={{ fontSize: 13, opacity: 0.85 }}>Today's Duty</div>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{duty.wardName}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <MdSchedule size={20} />
+              <span style={{ fontSize: 16, fontWeight: 600 }}>
+                {duty.shift === 'MORNING' ? 'Morning Shift' : duty.shift === 'EVENING' ? 'Evening Shift' : 'Night Shift'}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="nurse-overview-summary">
           <div className="nurse-overview-card nurse-overview-card-kpi">

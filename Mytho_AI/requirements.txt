@@ -1,0 +1,8 @@
+flask==2.3.3
+flask-cors==4.0.0
+python-dotenv==1.0.0
+requests==2.31.0
+# 3.2.9 has Windows + Python 3.13 binary wheels; 3.1.12 does not.
+psycopg[binary]==3.2.9
+# For local smoke tests we avoid heavy DB/LLM deps. Install `transformers`
+# separately in production environments if required.

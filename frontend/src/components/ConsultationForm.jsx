@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../utils/api';
+import { DEPARTMENTS } from '../constants/departments';
 
 function FieldLabel({ children }) {
   return <span className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-600">{children}</span>;
@@ -20,13 +21,14 @@ function labNameMatchesQuery(queryRaw, nameRaw) {
   return false;
 }
 
-function TextArea({ value, onChange, placeholder }) {
+function TextArea({ value, onChange, placeholder, disabled }) {
   return (
     <textarea
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="mt-1 w-full px-4 py-2.5 rounded-xl border bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 min-h-[84px] text-sm"
+      disabled={disabled}
+      className="mt-1 w-full px-4 py-2.5 rounded-xl border bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 min-h-[84px] text-sm disabled:bg-slate-50 disabled:text-slate-400"
       style={{ borderColor: 'rgba(0,0,0,0.12)' }}
     />
   );
@@ -48,6 +50,7 @@ export default function ConsultationForm({
     followUpDate: '',
     disposition: 'NORMAL',
     suggestedWardType: 'GENERAL',
+    referredDepartment: '',
     medicines: [{ name: '', dosage: '', duration: '', mode: '' }],
     selectedTestIds: [],
   },
@@ -60,6 +63,10 @@ export default function ConsultationForm({
   const [followUpDate, setFollowUpDate] = useState(initial.followUpDate);
   const [disposition, setDisposition] = useState(initial.disposition || 'NORMAL');
   const [suggestedWardType, setSuggestedWardType] = useState(initial.suggestedWardType || 'GENERAL');
+  const [referredDepartment, setReferredDepartment] = useState(initial.referredDepartment || '');
+  const [referredDoctorId, setReferredDoctorId] = useState(initial.referredDoctorId || '');
+  const [deptDoctors, setDeptDoctors] = useState([]);
+  const [loadingDeptDoctors, setLoadingDeptDoctors] = useState(false);
   const [medicines, setMedicines] = useState(initial.medicines);
   const [labCatalog, setLabCatalog] = useState([]);
   const [selectedTestIds, setSelectedTestIds] = useState(() =>
@@ -81,6 +88,8 @@ export default function ConsultationForm({
     setFollowUpDate(initial.followUpDate || '');
     setDisposition(initial.disposition || 'NORMAL');
     setSuggestedWardType(initial.suggestedWardType || 'GENERAL');
+    setReferredDepartment(initial.referredDepartment || '');
+    setReferredDoctorId(initial.referredDoctorId || '');
     setMedicines(
       Array.isArray(initial.medicines) && initial.medicines.length
         ? initial.medicines.map((m) => ({ ...m, mode: m?.mode ?? '' }))
@@ -117,6 +126,35 @@ export default function ConsultationForm({
     };
   }, []);
 
+  useEffect(() => {
+    if (!referredDepartment) {
+      setDeptDoctors([]);
+      setReferredDoctorId('');
+      return;
+    }
+    let alive = true;
+    (async () => {
+      setLoadingDeptDoctors(true);
+      try {
+        const res = await api.get('/doctors/lookup', { params: { q: referredDepartment } });
+        if (!alive) return;
+        const items = Array.isArray(res?.data?.items) ? res.data.items : [];
+        const list = items
+          .filter((d) => String(d.specialization || '').toLowerCase().includes(referredDepartment.toLowerCase()))
+          .map((d) => ({ id: d.id, name: d.name }));
+        setDeptDoctors(list);
+      } catch (err) {
+        console.warn('Failed to load referred department doctors', err);
+        if (alive) setDeptDoctors([]);
+      } finally {
+        if (alive) setLoadingDeptDoctors(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [referredDepartment]);
+
   const prescription = useMemo(
     () =>
       (medicines || [])
@@ -146,8 +184,9 @@ export default function ConsultationForm({
     // Backward-compatible: mode may be missing on old records,
     // but new entries via this form must select a mode per medicine row.
     if (hasMissingMode) return false;
+    if (disposition === 'REFER_DEPT' && !referredDepartment) return false;
     return true;
-  }, [symptoms, diagnosis, prescription.length, hasMissingMode]);
+  }, [symptoms, diagnosis, prescription.length, hasMissingMode, disposition, referredDepartment]);
 
   const testNameById = useMemo(() => {
     const m = new Map();
@@ -173,10 +212,12 @@ export default function ConsultationForm({
       prescription,
       disposition,
       suggestedWardType: disposition === 'REFER_ADMIT' ? suggestedWardType : null,
+      referredDepartment: disposition === 'REFER_DEPT' ? referredDepartment : null,
+      referredDoctorId: disposition === 'REFER_DEPT' ? referredDoctorId || null : null,
       follow_up_date: followUpDate || null,
       selected_tests: [...selectedTestIds],
     }),
-    [symptoms, diagnosis, prescription, disposition, suggestedWardType, followUpDate, selectedTestIds]
+    [symptoms, diagnosis, prescription, disposition, suggestedWardType, referredDepartment, referredDoctorId, followUpDate, selectedTestIds]
   );
 
   return (
@@ -188,12 +229,13 @@ export default function ConsultationForm({
           <select
             value={disposition}
             onChange={(e) => setDisposition(e.target.value)}
-            className="mt-1 h-10 w-full px-3 rounded-xl border bg-white text-sm"
+            className="mt-1 h-10 w-full px-3 rounded-xl border bg-white text-sm font-semibold text-slate-800"
             style={{ borderColor: 'rgba(0,0,0,0.12)' }}
             disabled={disabled}
           >
             <option value="NORMAL">Normal</option>
             <option value="REFER_ADMIT">Refer for Admit (IPD)</option>
+            <option value="REFER_DEPT">Refer to another Department</option>
           </select>
 
           {disposition === 'REFER_ADMIT' ? (
@@ -215,17 +257,63 @@ export default function ConsultationForm({
               </p>
             </div>
           ) : null}
+
+          {disposition === 'REFER_DEPT' ? (
+            <div className="pt-2 space-y-2">
+              <div>
+                <FieldLabel>Select Department</FieldLabel>
+                <select
+                  value={referredDepartment}
+                  onChange={(e) => setReferredDepartment(e.target.value)}
+                  className="mt-1 h-10 w-full px-3 rounded-xl border bg-white text-sm font-semibold text-slate-800"
+                  style={{ borderColor: 'rgba(0,0,0,0.12)' }}
+                  disabled={disabled}
+                >
+                  <option value="">-- Choose Department --</option>
+                  {DEPARTMENTS.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {referredDepartment && (
+                <div>
+                  <FieldLabel>Select Doctor (Optional)</FieldLabel>
+                  <select
+                    value={referredDoctorId}
+                    onChange={(e) => setReferredDoctorId(e.target.value)}
+                    className="mt-1 h-10 w-full px-3 rounded-xl border bg-white text-sm font-semibold text-slate-800"
+                    style={{ borderColor: 'rgba(0,0,0,0.12)' }}
+                    disabled={disabled || loadingDeptDoctors}
+                  >
+                    <option value="">{loadingDeptDoctors ? 'Loading doctors...' : '-- Choose Doctor (Optional) --'}</option>
+                    {deptDoctors.map((doc) => (
+                      <option key={doc.id} value={doc.id}>
+                        {doc.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <p className="mt-1 text-[11px] text-slate-500 font-semibold">
+                Visible to Receptionist during registration / booking.
+              </p>
+            </div>
+          ) : null}
         </SectionCard>
 
         <SectionCard title="Clinical details">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel>Symptoms</FieldLabel>
-              <TextArea value={symptoms} onChange={setSymptoms} placeholder="Symptoms" />
+              <TextArea value={symptoms} onChange={setSymptoms} placeholder="Symptoms" disabled={disabled} />
             </div>
             <div>
               <FieldLabel>Diagnosis</FieldLabel>
-              <TextArea value={diagnosis} onChange={setDiagnosis} placeholder="Diagnosis" />
+              <TextArea value={diagnosis} onChange={setDiagnosis} placeholder="Diagnosis" disabled={disabled} />
             </div>
           </div>
         </SectionCard>
@@ -245,6 +333,7 @@ export default function ConsultationForm({
                   )
                 }
                 placeholder="Medicine"
+                disabled={disabled}
                 className="w-full h-10 px-3 rounded-xl border bg-white text-sm"
                 style={{ borderColor: 'rgba(0,0,0,0.12)' }}
               />
@@ -256,6 +345,7 @@ export default function ConsultationForm({
                   )
                 }
                 placeholder="Dosage"
+                disabled={disabled}
                 className="w-full h-10 px-3 rounded-xl border bg-white text-sm"
                 style={{ borderColor: 'rgba(0,0,0,0.12)' }}
               />
@@ -267,6 +357,7 @@ export default function ConsultationForm({
                   )
                 }
                 placeholder="Duration"
+                disabled={disabled}
                 className="w-full h-10 px-3 rounded-xl border bg-white text-sm"
                 style={{ borderColor: 'rgba(0,0,0,0.12)' }}
               />
@@ -344,7 +435,7 @@ export default function ConsultationForm({
                     checked={selectedTestIds.includes(t.id)}
                     onChange={() => toggleLabTestId(t.id)}
                     disabled={disabled}
-                    className="h-4 w-4 rounded border-gray-300 text-[#00AEEF] focus:ring-blue-200"
+                    className="h-4 w-4 rounded border-gray-300 text-[#0077B6] focus:ring-[#0077B6]/20"
                   />
                   <span className="text-sm font-semibold text-gray-900">{t.name}</span>
                 </label>
@@ -409,8 +500,7 @@ export default function ConsultationForm({
                 setSubmittedSnapshot(null);
                 setReviewOpen(true);
               }}
-              className="mt-3 w-full h-11 px-4 rounded-xl text-sm font-extrabold text-white disabled:opacity-60 shadow-sm"
-              style={{ background: '#00AEEF' }}
+              className="mt-3 w-full h-11 px-4 rounded-xl text-sm font-extrabold text-white bg-[#0077B6] hover:bg-[#00B4D8] disabled:opacity-60 shadow-sm transition"
             >
               Complete Consultation
             </button>
@@ -487,10 +577,11 @@ export default function ConsultationForm({
                       >
                         <option value="NORMAL">Normal</option>
                         <option value="REFER_ADMIT">Refer for Admit (IPD)</option>
+                        <option value="REFER_DEPT">Refer to another Department</option>
                       </select>
                     ) : (
                       <p className="text-sm font-extrabold text-gray-900">
-                        {disposition === 'REFER_ADMIT' ? 'Refer for Admit (IPD)' : 'Normal'}
+                        {disposition === 'REFER_ADMIT' ? 'Refer for Admit (IPD)' : disposition === 'REFER_DEPT' ? 'Refer to another Department' : 'Normal'}
                       </p>
                     )}
                     {disposition === 'REFER_ADMIT' ? (
@@ -511,6 +602,58 @@ export default function ConsultationForm({
                           <p className="text-sm font-extrabold text-gray-900">
                             {suggestedWardType === 'ICU' ? 'ICU' : suggestedWardType === 'PRIVATE' ? 'Private' : 'General'}
                           </p>
+                        )}
+                      </div>
+                    ) : null}
+                    {disposition === 'REFER_DEPT' ? (
+                      <div className="mt-2 space-y-2">
+                        <div>
+                          <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wide">Referred Department</p>
+                          {reviewEdit ? (
+                            <select
+                              value={referredDepartment}
+                              onChange={(e) => setReferredDepartment(e.target.value)}
+                              className="mt-1 w-full px-3 py-2.5 rounded-xl border bg-white text-sm"
+                              style={{ borderColor: 'rgba(0,0,0,0.12)' }}
+                            >
+                              <option value="">-- Choose Department --</option>
+                              {DEPARTMENTS.map((dept) => (
+                                <option key={dept} value={dept}>
+                                  {dept}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <p className="text-sm font-extrabold text-gray-900">
+                              {referredDepartment || '—'}
+                            </p>
+                          )}
+                        </div>
+
+                        {referredDepartment && (
+                          <div>
+                            <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wide">Referred Doctor</p>
+                            {reviewEdit ? (
+                              <select
+                                value={referredDoctorId}
+                                onChange={(e) => setReferredDoctorId(e.target.value)}
+                                className="mt-1 w-full px-3 py-2.5 rounded-xl border bg-white text-sm"
+                                style={{ borderColor: 'rgba(0,0,0,0.12)' }}
+                                disabled={loadingDeptDoctors}
+                              >
+                                <option value="">{loadingDeptDoctors ? 'Loading doctors...' : '-- Choose Doctor (Optional) --'}</option>
+                                {deptDoctors.map((doc) => (
+                                  <option key={doc.id} value={doc.id}>
+                                    {doc.name}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <p className="text-sm font-extrabold text-gray-900">
+                                {deptDoctors.find((d) => d.id === referredDoctorId)?.name || '—'}
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
                     ) : null}
@@ -682,7 +825,7 @@ export default function ConsultationForm({
                                 type="checkbox"
                                 checked={selectedTestIds.includes(t.id)}
                                 onChange={() => toggleLabTestId(t.id)}
-                                className="h-4 w-4 rounded border-gray-300 text-[#00AEEF] focus:ring-blue-200"
+                                className="h-4 w-4 rounded border-gray-300 text-[#0077B6] focus:ring-[#0077B6]/20"
                               />
                               <span className="text-sm font-semibold text-gray-900">{t.name}</span>
                             </label>
@@ -758,8 +901,7 @@ export default function ConsultationForm({
                           setReviewSubmitting(false);
                         }
                       }}
-                      className="px-4 py-2.5 rounded-xl text-sm font-extrabold text-white disabled:opacity-60"
-                      style={{ background: '#00AEEF' }}
+                      className="px-4 py-2.5 rounded-xl text-sm font-extrabold text-white bg-[#0077B6] hover:bg-[#00B4D8] disabled:opacity-60 transition shadow-sm"
                       disabled={disabled || !canSubmit || reviewSubmitting}
                     >
                       {reviewSubmitting ? 'Saving…' : 'Complete'}

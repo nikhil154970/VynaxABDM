@@ -32,6 +32,7 @@ export const PHARMACY_SIDEBAR_MENU = [
   { label: 'GRN', path: '/dashboard/pharmacy/grn', icon: ClipboardCheck },
   { label: 'Suppliers', path: '/dashboard/pharmacy/suppliers', icon: Truck },
   { label: 'Returns', path: '/dashboard/pharmacy/returns', icon: RotateCcw },
+  { label: 'OT Issue', path: '/dashboard/pharmacy/ot-issue', icon: Pill },
   { label: 'Reports', path: '/dashboard/pharmacy/reports', icon: BarChart3 },
   { label: 'Profile', path: '/dashboard/pharmacy/profile', icon: User },
 ];

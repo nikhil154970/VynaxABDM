@@ -3,16 +3,17 @@ const { param } = require('express-validator');
 const { validateRequest } = require('../../../middleware/validateRequest');
 const { authMiddleware } = require('../../../middleware/authMiddleware');
 const { roleMiddleware } = require('../../../middleware/roleMiddleware');
-const { listMyNotifications, markRead } = require('./notifications.controller');
+const { listMyNotifications, markRead, markAllRead } = require('./notifications.controller');
 
 const router = express.Router();
 
-router.get('/', authMiddleware, roleMiddleware(['DOCTOR']), listMyNotifications);
+router.get('/', authMiddleware, listMyNotifications);
+
+router.patch('/read-all', authMiddleware, markAllRead);
 
 router.patch(
   '/:id/read',
   authMiddleware,
-  roleMiddleware(['DOCTOR']),
   [param('id').isUUID().withMessage('Valid notification id is required')],
   validateRequest,
   markRead

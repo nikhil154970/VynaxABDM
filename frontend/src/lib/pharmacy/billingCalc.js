@@ -3,7 +3,9 @@ export function calcLineAmount(qty, sellingPrice, discountPercent, gstPercentage
   const price = Math.max(0, Number(sellingPrice) || 0);
   const disc = Math.min(100, Math.max(0, Number(discountPercent) || 0));
   const gst = Math.max(0, Number(gstPercentage) || 0);
-  const lineBase = quantity * price;
+
+  const basePrice = price / (1 + gst / 100);
+  const lineBase = quantity * basePrice;
   const afterDisc = lineBase - (lineBase * disc) / 100;
   const lineGst = (afterDisc * gst) / 100;
   return Math.round((afterDisc + lineGst) * 100) / 100;
@@ -18,9 +20,12 @@ export function calcBillTotals(items) {
     const qty = Number(item.quantity) || 0;
     const discPct = Number(item.discountPercent) || 0;
     const gst = Number(item.gstPercentage) || 0;
-    const lineBase = qty * price;
+
+    const basePrice = price / (1 + gst / 100);
+    const lineBase = qty * basePrice;
     const lineDisc = (lineBase * discPct) / 100;
     const afterDisc = lineBase - lineDisc;
+
     subtotal += lineBase;
     discount += lineDisc;
     gstAmount += (afterDisc * gst) / 100;

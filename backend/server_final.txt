@@ -1,0 +1,7 @@
+◇ injected env (8) from backend\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+[db] Connecting to dpg-d8emr3e8bjmc73b9gue0-a.oregon-postgres.render.com/ht_hospital ...
+[db] Connected
+Server running on port 5000 (stable — no auto-restart)
+[db] SUPER_ADMIN ready (admin@ht.com)
+[db] Demo staff seeded (password: ChangeMeNow123!)

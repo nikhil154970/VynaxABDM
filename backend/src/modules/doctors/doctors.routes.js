@@ -15,6 +15,7 @@ const {
   patchDoctorStatus,
   listAvailability,
   upsertAvailability,
+  listTimeSlots,
 } = require('./doctors.controller');
 
 const router = express.Router();
@@ -22,8 +23,11 @@ const router = express.Router();
 // Doctor self profile (must be defined before "/:id")
 router.get('/me', authMiddleware, roleMiddleware(['DOCTOR']), getMyDoctorProfile);
 
-// Lightweight list for receptionist appointment booking
-router.get('/lookup', authMiddleware, roleMiddleware(['RECEPTIONIST', 'SUPER_ADMIN']), listDoctorLookup);
+// Lightweight list for receptionist appointment booking and doctor referrals
+router.get('/lookup', authMiddleware, roleMiddleware(['RECEPTIONIST', 'SUPER_ADMIN', 'DOCTOR']), listDoctorLookup);
+
+// Available time slots for a doctor on a given date
+router.get('/:id/slots', authMiddleware, roleMiddleware(['RECEPTIONIST', 'SUPER_ADMIN']), listTimeSlots);
 
 router.get('/', authMiddleware, roleMiddleware(['SUPER_ADMIN']), listDoctors);
 router.get(

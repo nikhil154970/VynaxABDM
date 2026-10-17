@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { MdCalendarToday, MdSave } from 'react-icons/md';
 import api from '../../../utils/api';
 import AvailabilityScheduler from '../../../components/AvailabilityScheduler';
 import Toast from '../../../components/Toast';
@@ -74,30 +75,36 @@ export default function Availability() {
   };
 
   return (
-    <div className="p-6 sm:p-8 bg-[#F5F7FA] min-h-full">
+    <div className="p-6 space-y-6">
       <Toast type={toast.type} message={toast.message} onClose={() => setToast((t) => ({ ...t, message: '' }))} />
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-extrabold text-gray-900">Doctor Availability</h1>
-            <p className="text-sm text-gray-500 mt-1">Weekly schedule required for appointment booking.</p>
+      <div className="max-w-[1600px] mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-[#0077B6] shadow-sm shrink-0">
+              <MdCalendarToday className="w-6 h-6" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">Doctor Availability</h1>
+              <p className="text-xs md:text-sm text-gray-500">Weekly schedule required for appointment booking.</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={save}
-            className="px-4 py-2.5 rounded-2xl text-sm font-extrabold bg-[#E53935] text-white hover:bg-[#d6322f] transition shadow-sm disabled:opacity-60"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#0077B6] text-white hover:bg-[#005f92] active:bg-[#001B48] transition duration-200 cursor-pointer shadow-sm disabled:opacity-60 shrink-0"
             disabled={saving || loading || !doctorId}
           >
+            <MdSave className="w-4.5 h-4.5" />
             {saving ? 'Saving…' : 'Save Availability'}
           </button>
         </div>
 
-        <div className="mb-4 bg-white rounded-3xl ring-1 ring-black/5 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.45)] px-6 sm:px-8 py-5">
-          <label className="block text-sm font-extrabold text-gray-800 mb-2">Select Doctor</label>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+          <label className="block text-xs font-semibold text-gray-500 mb-1.5">Select Doctor</label>
           <select
             value={doctorId}
             onChange={(e) => setDoctorId(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-2xl ring-1 ring-gray-200 focus:ring-2 focus:ring-[#00AEEF] outline-none transition bg-white"
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0077B6]/25 focus:border-[#0077B6] transition duration-200 hover:border-gray-300 cursor-pointer"
             disabled={loading}
           >
             <option value="">{loading ? 'Loading doctors…' : 'Choose a doctor'}</option>

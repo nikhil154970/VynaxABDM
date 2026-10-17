@@ -119,7 +119,7 @@ export default function TokenQueue() {
           {/* Full Queue */}
           <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"
-              style={{ background: 'linear-gradient(135deg, #1e3a8a08, #1e40af05)' }}>
+              style={{ backgroundColor: '#f0f9ff' }}>
               <h2 className="font-bold text-gray-800">Full Queue</h2>
               <span className="text-xs text-gray-400">{queue.length} tokens issued</span>
             </div>
@@ -171,3 +171,4 @@ export default function TokenQueue() {
     </div>
   );
 }
+

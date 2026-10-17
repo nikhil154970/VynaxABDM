@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MdAdd, MdClose, MdPerson, MdSave, MdScience, MdSearch } from 'react-icons/md';
 import api from '../../../utils/api';
-import { LAB_TEST_CATEGORIES } from '../../../constants/labTestCategories';
 import { printLabBillSlip } from '../../../utils/printLabBillSlip';
 import {
   isAyushmanSponsor,
@@ -13,40 +12,27 @@ import {
 
 const inputCls =
   'w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition';
-const selectCls =
-  'w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition';
 
 function money(n) {
   return `₹${Math.max(0, Number(n || 0)).toLocaleString('en-IN')}`;
 }
 
-function newTestRow(category = '') {
+function newTestRow() {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    category: category || '',
     testId: null,
     name: '',
-    amount: '',
+    price: 0,
     query: '',
     sugOpen: false,
     sugIndex: 0,
   };
 }
 
-function testsForCategory(catalogTests, category) {
-  if (!category) return [];
-  return catalogTests.filter((t) => t.category === category);
-}
-
-function filterTestsForRow(tests, query, excludeIds) {
+function filterTests(tests, query) {
   const q = String(query || '').trim().toLowerCase();
-  const pool = tests.filter((t) => !excludeIds.has(t.id));
-  if (!q) return pool.slice(0, 12);
-  return pool.filter((t) => t.name.toLowerCase().includes(q)).slice(0, 12);
-}
-
-function rowCategory(row, activeCategory) {
-  return row.category || activeCategory || '';
+  if (!q) return tests.slice(0, 12);
+  return tests.filter((t) => t.name.toLowerCase().includes(q)).slice(0, 12);
 }
 
 export default function CreateLabBill() {
@@ -57,9 +43,8 @@ export default function CreateLabBill() {
   const [searching, setSearching] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
 
-  const [catalog, setCatalog] = useState({ categories: LAB_TEST_CATEGORIES, tests: [] });
+  const [catalog, setCatalog] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState('');
   const [testRows, setTestRows] = useState([newTestRow()]);
   const blurTimers = useRef({});
 
@@ -72,15 +57,6 @@ export default function CreateLabBill() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const categoriesWithTests = useMemo(() => {
-    const counts = new Map();
-    catalog.tests.forEach((t) => {
-      if (t.category) counts.set(t.category, (counts.get(t.category) || 0) + 1);
-    });
-    const ordered = catalog.categories.length ? catalog.categories : LAB_TEST_CATEGORIES;
-    return ordered.filter((c) => counts.get(c) > 0);
-  }, [catalog.categories, catalog.tests]);
-
   const filledTests = useMemo(
     () =>
       testRows
@@ -88,16 +64,13 @@ export default function CreateLabBill() {
         .map((r) => ({
           testId: r.testId,
           name: r.name.trim(),
-          amount: r.amount === '' || r.amount == null ? null : Number(r.amount),
+          amount: Number(r.price) || 0,
         })),
     [testRows],
   );
 
   const computedTotal = useMemo(() => {
-    return filledTests.reduce((s, t) => {
-      if (t.amount == null || !Number.isFinite(t.amount)) return s;
-      return s + Math.max(0, t.amount);
-    }, 0);
+    return filledTests.reduce((s, t) => s + Math.max(0, t.amount), 0);
   }, [filledTests]);
 
   useEffect(() => {
@@ -113,11 +86,9 @@ export default function CreateLabBill() {
     setCatalogLoading(true);
     try {
       const res = await api.get('/lab/tests', { params: { forBilling: 1 } });
-      const tests = Array.isArray(res.data?.tests) ? res.data.tests : [];
-      const categories = Array.isArray(res.data?.categories) ? res.data.categories : LAB_TEST_CATEGORIES;
-      setCatalog({ categories, tests });
+      setCatalog(Array.isArray(res.data?.tests) ? res.data.tests : []);
     } catch {
-      setCatalog({ categories: LAB_TEST_CATEGORIES, tests: [] });
+      setCatalog([]);
     } finally {
       setCatalogLoading(false);
     }
@@ -201,41 +172,6 @@ export default function CreateLabBill() {
     }
   };
 
-  /** Top category picker — does NOT clear existing billed lines; sets default for empty rows + new rows */
-  const onActiveCategoryChange = (cat) => {
-    setActiveCategory(cat);
-    setError('');
-    setTestRows((prev) => {
-      const mapped = prev.map((r) => {
-        if (r.testId) return r;
-        return { ...r, category: cat };
-      });
-      const last = mapped[mapped.length - 1];
-      if (last?.testId) return [...mapped, newTestRow(cat)];
-      return mapped;
-    });
-  };
-
-  const onRowCategoryChange = (rowId, cat) => {
-    setActiveCategory(cat);
-    setTestRows((prev) =>
-      prev.map((r) =>
-        r.id === rowId
-          ? {
-              ...r,
-              category: cat,
-              testId: null,
-              name: '',
-              query: '',
-              amount: '',
-              sugOpen: false,
-              sugIndex: 0,
-            }
-          : r,
-      ),
-    );
-  };
-
   const usedTestIds = useCallback(
     (exceptRowId) => {
       const ids = new Set();
@@ -248,17 +184,15 @@ export default function CreateLabBill() {
   );
 
   const pickTest = (rowId, test) => {
-    const cat = test.category || activeCategory;
     setTestRows((prev) => {
       const updated = prev.map((r) =>
         r.id === rowId
           ? {
               ...r,
-              category: cat,
               testId: test.id,
               name: test.name,
               query: test.name,
-              amount: String(test.price ?? 0),
+              price: test.price ?? 0,
               sugOpen: false,
               sugIndex: 0,
             }
@@ -266,10 +200,9 @@ export default function CreateLabBill() {
       );
       const idx = updated.findIndex((r) => r.id === rowId);
       const isLast = idx === updated.length - 1;
-      if (isLast && test.id) return [...updated, newTestRow(cat || activeCategory)];
+      if (isLast && test.id) return [...updated, newTestRow()];
       return updated;
     });
-    if (cat) setActiveCategory(cat);
     setError('');
   };
 
@@ -277,15 +210,7 @@ export default function CreateLabBill() {
     setTestRows((prev) =>
       prev.map((r) =>
         r.id === rowId
-          ? {
-              ...r,
-              query: value,
-              name: value,
-              testId: null,
-              amount: '',
-              sugOpen: true,
-              sugIndex: 0,
-            }
+          ? { ...r, query: value, name: value, testId: null, price: 0, sugOpen: true, sugIndex: 0 }
           : r,
       ),
     );
@@ -294,10 +219,8 @@ export default function CreateLabBill() {
   const onTestKeyDown = (rowId, e) => {
     const row = testRows.find((r) => r.id === rowId);
     if (!row) return;
-    const cat = rowCategory(row, activeCategory);
-    if (!cat) return;
     const exclude = usedTestIds(rowId);
-    const sug = filterTestsForRow(testsForCategory(catalog.tests, cat), row.query, exclude);
+    const sug = filterTests(catalog, row.query);
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -337,14 +260,13 @@ export default function CreateLabBill() {
     }, 160);
   };
 
-  const addTestRow = () => setTestRows((prev) => [...prev, newTestRow(activeCategory)]);
+  const addTestRow = () => setTestRows((prev) => [...prev, newTestRow()]);
 
   const removeTestRow = (id) => {
     setTestRows((prev) => (prev.length <= 1 ? [newTestRow()] : prev.filter((r) => r.id !== id)));
   };
 
   const resetForm = (keepPatient = true) => {
-    setActiveCategory('');
     setTestRows([newTestRow()]);
     setNotes('');
     setError('');
@@ -369,16 +291,7 @@ export default function CreateLabBill() {
       return;
     }
     if (!filledTests.length) {
-      setError('Kam se kam ek test list se select karein');
-      return;
-    }
-    const missingAmount = filledTests.some((t) => t.amount == null || !Number.isFinite(t.amount) || t.amount < 0);
-    if (missingAmount) {
-      setError('Har selected test ka price load hona chahiye (admin catalog)');
-      return;
-    }
-    if (computedTotal <= 0 && !selectedPatient.isAyushman) {
-      setError('Total amount 0 se zyada honi chahiye');
+      setError('Kam se kam ek test select karein');
       return;
     }
 
@@ -459,7 +372,7 @@ export default function CreateLabBill() {
           <h1 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
             <MdScience className="text-cyan-600" /> Create lab bill
           </h1>
-          <p className="text-xs text-gray-500 mt-1">Multiple categories — purane tests rahenge, nayi category sirf agli line ke liye</p>
+          <p className="text-xs text-gray-500 mt-1">Select tests from admin catalog — price auto-fills</p>
         </div>
 
         {error ? (
@@ -536,63 +449,26 @@ export default function CreateLabBill() {
               </button>
             </div>
 
-            <label className="block text-xs font-semibold text-gray-600">
-              Category for next test (purani lines safe rahengi)
-              <select
-                value={activeCategory}
-                onChange={(e) => onActiveCategoryChange(e.target.value)}
-                className={`${selectCls} mt-1`}
-                disabled={catalogLoading}
-              >
-                <option value="">{catalogLoading ? 'Loading catalog…' : 'Select category e.g. Hematology'}</option>
-                {(categoriesWithTests.length ? categoriesWithTests : catalog.categories).map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </label>
-
             {catalogLoading ? (
               <p className="text-xs text-gray-500">Catalog load ho raha hai…</p>
             ) : (
               <>
-                <div className="hidden sm:grid grid-cols-[minmax(100px,130px)_1fr_100px_40px] gap-2 px-1 text-[10px] font-extrabold uppercase text-gray-500">
-                  <span>Category</span>
+                <div className="hidden sm:grid grid-cols-[1fr_100px_40px] gap-2 px-1 text-[10px] font-extrabold uppercase text-gray-500">
                   <span>Test name</span>
                   <span className="text-right">Amount (₹)</span>
                   <span />
                 </div>
                 <ul className="space-y-2">
                   {testRows.map((row, idx) => {
-                    const cat = rowCategory(row, activeCategory);
-                    const catTests = testsForCategory(catalog.tests, cat);
                     const exclude = usedTestIds(row.id);
-                    const rowSuggestions = filterTestsForRow(catTests, row.query, exclude);
-                    const showSug = row.sugOpen && rowSuggestions.length > 0 && !row.testId && cat;
+                    const rowSuggestions = filterTests(catalog, row.query);
+                    const showSug = row.sugOpen && rowSuggestions.length > 0 && !row.testId;
 
                     return (
                       <li
                         key={row.id}
-                        className="grid grid-cols-1 sm:grid-cols-[minmax(100px,130px)_1fr_100px_40px] gap-2 items-start rounded-xl sm:rounded-none border sm:border-0 border-gray-100 p-2 sm:p-0"
+                        className="grid grid-cols-1 sm:grid-cols-[1fr_100px_40px] gap-2 items-start rounded-xl sm:rounded-none border sm:border-0 border-gray-100 p-2 sm:p-0"
                       >
-                        <span className="text-xs font-bold text-gray-400 sm:hidden">{idx + 1}.</span>
-                        <div>
-                          <span className="text-[10px] font-bold text-gray-500 sm:hidden">Category</span>
-                          <select
-                            value={cat}
-                            onChange={(e) => onRowCategoryChange(row.id, e.target.value)}
-                            disabled={Boolean(row.testId)}
-                            className={`${selectCls} text-xs mt-0.5 sm:mt-0 ${row.testId ? 'bg-gray-100' : ''}`}
-                          >
-                            <option value="">Select…</option>
-                            {(categoriesWithTests.length ? categoriesWithTests : catalog.categories).map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
                         <div className="relative">
                           <span className="text-[10px] font-bold text-gray-500 sm:hidden">Test</span>
                           <input
@@ -600,25 +476,18 @@ export default function CreateLabBill() {
                             onChange={(e) => onTestQueryChange(row.id, e.target.value)}
                             onFocus={() => {
                               if (blurTimers.current[row.id]) clearTimeout(blurTimers.current[row.id]);
-                              if (!row.testId && cat) setActiveCategory(cat);
                               setTestRows((prev) =>
                                 prev.map((r) =>
-                                  r.id === row.id ? { ...r, category: cat || r.category, sugOpen: true, sugIndex: 0 } : r,
+                                  r.id === row.id ? { ...r, sugOpen: true, sugIndex: 0 } : r,
                                 ),
                               );
                             }}
                             onBlur={() => scheduleBlurClose(row.id)}
                             onKeyDown={(e) => onTestKeyDown(row.id, e)}
                             className={`${inputCls} mt-0.5 sm:mt-0`}
-                            placeholder={cat ? 'Type test e.g. CB' : 'Pehle category select karein'}
+                            placeholder="Type test name e.g. CBC"
                             autoComplete="off"
-                            disabled={!cat && !row.testId}
                           />
-                          {!cat && !row.testId ? (
-                            <p className="text-[10px] text-amber-700 mt-1">Category select karein</p>
-                          ) : cat && !row.testId && catTests.length === 0 ? (
-                            <p className="text-[10px] text-amber-700 mt-1">Is category me test nahi</p>
-                          ) : null}
                           {showSug ? (
                             <div
                               className="absolute z-20 mt-1 w-full rounded-xl border bg-white shadow-lg max-h-48 overflow-auto"
@@ -644,18 +513,11 @@ export default function CreateLabBill() {
                         <div>
                           <span className="text-[10px] font-bold text-gray-500 sm:hidden">Amount</span>
                           <input
-                            value={row.amount}
-                            readOnly={Boolean(row.testId)}
-                            onChange={(e) => {
-                              if (row.testId) return;
-                              setTestRows((prev) =>
-                                prev.map((r) => (r.id === row.id ? { ...r, amount: e.target.value } : r)),
-                              );
-                            }}
-                            className={`${inputCls} text-right mt-0.5 sm:mt-0 ${row.testId ? 'bg-gray-100 text-gray-700' : ''}`}
-                            inputMode="decimal"
+                            value={row.price ? money(row.price) : ''}
+                            readOnly
+                            className={`${inputCls} text-right mt-0.5 sm:mt-0 bg-gray-100 text-gray-700 font-semibold`}
                             placeholder="₹"
-                            tabIndex={row.testId ? -1 : 0}
+                            tabIndex={-1}
                           />
                         </div>
                         {testRows.length > 1 || row.testId ? (
@@ -674,15 +536,8 @@ export default function CreateLabBill() {
                     );
                   })}
                 </ul>
-                <div className="flex flex-wrap justify-between items-center gap-2 pt-2 border-t border-gray-100">
-                  <span className="text-sm font-extrabold text-gray-700">
-                    Total
-                    {filledTests.length > 0 ? (
-                      <span className="block text-[10px] font-semibold text-gray-500 mt-0.5">
-                        {[...new Set(testRows.filter((r) => r.testId).map((r) => r.category).filter(Boolean))].join(' · ')}
-                      </span>
-                    ) : null}
-                  </span>
+                <div className="flex justify-between items-center gap-2 pt-2 border-t border-gray-100">
+                  <span className="text-sm font-extrabold text-gray-700">Total</span>
                   <span className="text-lg font-extrabold text-gray-900 tabular-nums">{money(computedTotal)}</span>
                 </div>
               </>
@@ -695,7 +550,7 @@ export default function CreateLabBill() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block text-xs font-semibold text-gray-600">
                   Payment mode
-                  <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className={`${selectCls} mt-1`}>
+                  <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className={`${inputCls} mt-1`}>
                     {['Cash', 'UPI', 'Card'].map((m) => (
                       <option key={m} value={m}>
                         {m}
@@ -716,7 +571,7 @@ export default function CreateLabBill() {
               </div>
               <label className="block text-xs font-semibold text-gray-600">
                 Consulting doctor (optional)
-                <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)} className={`${selectCls} mt-1`}>
+                <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)} className={`${inputCls} mt-1`}>
                   <option value="">Auto</option>
                   {doctors.map((d) => (
                     <option key={d.id} value={d.id}>

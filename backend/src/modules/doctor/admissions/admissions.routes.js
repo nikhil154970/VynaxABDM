@@ -3,7 +3,7 @@ const { param } = require('express-validator');
 const { validateRequest } = require('../../../middleware/validateRequest');
 const { authMiddleware } = require('../../../middleware/authMiddleware');
 const { roleMiddleware } = require('../../../middleware/roleMiddleware');
-const { getDoctorAdmissions, getAdmissionById } = require('./admissions.controller');
+const { getDoctorAdmissions, getAdmissionById, getAdmissionHistory } = require('./admissions.controller');
 
 const router = express.Router();
 
@@ -16,6 +16,15 @@ router.get(
   [param('id').isUUID().withMessage('Valid admission id is required')],
   validateRequest,
   getAdmissionById
+);
+
+router.get(
+  '/:id/history',
+  authMiddleware,
+  roleMiddleware(['DOCTOR', 'NURSE']),
+  [param('id').isUUID().withMessage('Valid admission id is required')],
+  validateRequest,
+  getAdmissionHistory
 );
 
 module.exports = router;

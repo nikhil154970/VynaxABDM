@@ -311,19 +311,7 @@ export default function LamaDischargeForm({ lama, onChange }) {
 
 
       <section className="dse-card dse-card--full">
-
         <h3 className="dse-sectionTitle">5 · Advice of doctor & risks explained</h3>
-
-        <p className="dse-staticBlock">
-
-          Standard risks (worsening condition, complications, ICU need, life-threatening delay, permanent injury,
-
-          morbidity, death) are included on the printed LAMA form. Patient / attendant has decided to leave against
-
-          medical advice.
-
-        </p>
-
       </section>
 
 

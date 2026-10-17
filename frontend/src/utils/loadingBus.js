@@ -18,6 +18,11 @@ export function getLoadingState() {
   return state;
 }
 
+export function resetGlobalLoading() {
+  state = { requests: 0, navigation: 0 };
+  emit();
+}
+
 export function startRequestLoading() {
   state = { ...state, requests: state.requests + 1 };
   emit();

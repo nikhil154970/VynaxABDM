@@ -158,11 +158,6 @@ const patientApi = {
     const res = await api.get(`/receptionist/patients/${uhid}/details`);
     return res?.data || null;
   },
-
-  async admit(uhid) {
-    await api.patch(`/receptionist/patients/${uhid}/admit`);
-    return true;
-  },
 };
 
 export default function SearchPatient() {
@@ -332,15 +327,6 @@ export default function SearchPatient() {
                 </div>
               ) : null}
             </div>
-
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard/reception/patients/register')}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow hover:shadow-md transition hover:-translate-y-0.5"
-              style={{ background: 'linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 60%, #1d4ed8 100%)' }}
-            >
-              <MdCalendarToday className="w-4 h-4" /> Register Patient
-            </button>
           </div>
 
           {query.length > 0 && query.trim().length < 2 ? (
@@ -542,6 +528,15 @@ export default function SearchPatient() {
                     <p className="text-xs text-gray-400 mt-0.5">Important attention items</p>
                   </div>
                   <div className="p-6 space-y-2">
+                    {selected.consultation?.disposition === 'REFER_DEPT' && (
+                      <div className="sp-alert bg-blue-50 border border-blue-100 text-blue-800 flex items-center gap-2 px-3 py-2 rounded-xl mb-2">
+                        <MdInfo className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span className="text-xs font-bold">
+                          Referred to Department: {selected.consultation?.referredDepartment || '—'}
+                          {selected.consultation?.referredDoctorName && ` (Doctor: ${selected.consultation.referredDoctorName})`}
+                        </span>
+                      </div>
+                    )}
                     {selected.alerts?.length ? (
                       selected.alerts.map((a, idx) => (
                         <div key={idx} className={`sp-alert ${a.type === 'payment' ? 'sp-alertDanger' : ''}`}>
@@ -570,21 +565,24 @@ export default function SearchPatient() {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   <button
-                    type="button"
-                    onClick={() =>
-                      navigate('/dashboard/reception/appointments/book', {
-                        state: {
-                          prefillPatient: {
-                            patientId: selected?.uhid || '',
-                            uhid: selected?.uhid || '',
-                            name: selected?.name || '',
-                            mobile: selected?.phone || '',
-                            age: selected?.age || '',
-                            gender: selected?.gender || '',
-                          },
-                        },
-                      })
-                    }
+                     type="button"
+                     onClick={() =>
+                       navigate('/dashboard/reception/appointments/book', {
+                         state: {
+                           prefillPatient: {
+                             patientId: selected?.uhid || '',
+                             uhid: selected?.uhid || '',
+                             name: selected?.name || '',
+                             mobile: selected?.phone || '',
+                             age: selected?.age || '',
+                             gender: selected?.gender || '',
+                             department: selected?.consultation?.disposition === 'REFER_DEPT' ? selected?.consultation?.referredDepartment : '',
+                             doctorId: selected?.consultation?.disposition === 'REFER_DEPT' ? selected?.consultation?.referredDoctorId : '',
+                             doctorName: selected?.consultation?.disposition === 'REFER_DEPT' ? selected?.consultation?.referredDoctorName : '',
+                           },
+                         },
+                       })
+                     }
                     className="sp-quickBtn"
                     style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}
                   >
@@ -598,19 +596,39 @@ export default function SearchPatient() {
                   >
                     <MdReceiptLong className="w-4 h-4" /> Open Billing
                   </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await patientApi.admit(selected.uhid);
-                      await fetchPatientFullDetails(selected.uhid);
-                    }}
-                    className="sp-quickBtn"
-                    style={{ background: 'linear-gradient(135deg, #065f46, #059669)' }}
-                    disabled={selected.visitType === 'IPD'}
-                    title={selected.visitType === 'IPD' ? 'Already IPD' : 'Admit patient'}
-                  >
-                    <MdBed className="w-4 h-4" /> Admit Patient
-                  </button>
+                  {(() => {
+                    const disp = selected?.consultation?.disposition;
+                    const canAdmit = !disp || disp === 'REFER_ADMIT';
+                    if (!canAdmit) return null;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate('/dashboard/reception/ipd/admit', {
+                            state: {
+                              prefillPatient: {
+                                uhid: selected.uhid,
+                                name: selected.name,
+                                mobile: selected.phone,
+                                age: selected.age,
+                                gender: selected.gender,
+                              },
+                            },
+                          });
+                        }}
+                        className="sp-quickBtn"
+                        style={{ background: 'linear-gradient(135deg, #065f46, #059669)' }}
+                        disabled={selected.hasActiveIpdAdmission}
+                        title={
+                          selected.hasActiveIpdAdmission
+                            ? 'Patient already has an active IPD admission'
+                            : 'Open full IPD admission form'
+                        }
+                      >
+                        <MdBed className="w-4 h-4" /> Admit Patient
+                      </button>
+                    );
+                  })()}
                   <button
                     type="button"
                     onClick={() => {
@@ -632,7 +650,7 @@ export default function SearchPatient() {
                           </head>
                           <body>
                             <div class="card">
-                              <p class="title">New H.T. Hospital — Billing Receipt</p>
+                              <p class="title">MQE HIMS — Billing Receipt</p>
                               <p class="sub">Patient: ${selected.name} · UHID: ${selected.uhid}</p>
                               ${selected.sponsor === 'AYUSHMAN' ? '<p class="sub"><b>Patient Type:</b> Ayushman &nbsp;|&nbsp; <b>Sponsor:</b> Ayushman</p>' : ''}
                               <div class="grid">
@@ -671,13 +689,16 @@ export default function SearchPatient() {
                             gender: selected?.gender,
                             address: selected?.address,
                             visitType: selected?.visitType,
+                            status: selected?.status,
                             department: selected?.department,
                             doctor: selected?.doctor,
                             visitDate: selected?.consultation?.lastDate,
                             token: selected?.token,
-                            paymentStatus: selected?.billing?.pending > 0 ? 'Pending' : 'Paid',
-                            paymentMode: '',
-                            registrationFee: 200,
+                            paymentStatus: selected?.paymentStatus || (selected?.billing?.pending > 0 ? 'Pending' : 'Paid'),
+                            paymentMode: selected?.paymentMode || '',
+                            registrationFee: selected?.registrationFee ?? '',
+                            referBy: selected?.referBy,
+                            sponsor: selected?.sponsor,
                           },
                         },
                       })

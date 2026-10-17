@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MdSearch } from 'react-icons/md';
 import api from '../../../utils/api';
 import { printDischargeByType, dischargeTypeLabel } from '../../../utils/dischargePrint';
 import './DischargeHistory.css';
@@ -108,61 +109,63 @@ export default function DischargeHistory() {
     <div className="discharge-history-container">
       <div className="discharge-history-shell">
         <div className="discharge-history-bar">
-          <div className="discharge-history-searchWrap">
+          <div className="discharge-history-filterGroup">
+            <span className="discharge-history-filterLabel">Search Patient</span>
+            <div className="discharge-history-searchWrap-inner">
+              <MdSearch className="discharge-history-searchIcon" />
+              <input
+                id="discharge-history-search"
+                type="search"
+                className="discharge-history-search"
+                placeholder="Search name, UHID, IPD no…"
+                aria-label="Search discharge records"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+          <div className="discharge-history-filterGroup">
+            <span className="discharge-history-filterLabel">From date</span>
             <input
-              id="discharge-history-search"
-              type="search"
-              className="discharge-history-search"
-              placeholder="Search name, UHID, IPD no…"
-              aria-label="Search discharge records"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoComplete="off"
+              type="date"
+              className="discharge-history-dateInput"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              aria-label="Discharge from date"
             />
           </div>
-          <div className="discharge-history-filters">
-            <div className="discharge-history-filterGroup">
-              <span className="discharge-history-filterLabel">From date</span>
-              <input
-                type="date"
-                className="discharge-history-dateInput"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                aria-label="Discharge from date"
-              />
-            </div>
-            <div className="discharge-history-filterGroup">
-              <span className="discharge-history-filterLabel">To date</span>
-              <input
-                type="date"
-                className="discharge-history-dateInput"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                aria-label="Discharge to date"
-              />
-            </div>
-            <div className="discharge-history-filterGroup discharge-history-filterGroup--doctor">
-              <span className="discharge-history-filterLabel">Doctor</span>
-              <select
-                className="discharge-history-select"
-                value={doctorId}
-                onChange={(e) => setDoctorId(e.target.value)}
-                aria-label="Filter by doctor"
-              >
-                <option value="">All doctors</option>
-                {doctorOptions.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {hasActiveFilters ? (
-              <button type="button" className="discharge-history-clearBtn" onClick={clearFilters}>
-                Clear filters
-              </button>
-            ) : null}
+          <div className="discharge-history-filterGroup">
+            <span className="discharge-history-filterLabel">To date</span>
+            <input
+              type="date"
+              className="discharge-history-dateInput"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              aria-label="Discharge to date"
+            />
           </div>
+          <div className="discharge-history-filterGroup">
+            <span className="discharge-history-filterLabel">Doctor</span>
+            <select
+              className="discharge-history-select"
+              value={doctorId}
+              onChange={(e) => setDoctorId(e.target.value)}
+              aria-label="Filter by doctor"
+            >
+              <option value="">All doctors</option>
+              {doctorOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {hasActiveFilters ? (
+            <button type="button" className="discharge-history-clearBtn" onClick={clearFilters}>
+              Clear filters
+            </button>
+          ) : null}
         </div>
 
         <section className="discharge-history-card">

@@ -567,7 +567,7 @@ export default function SimpleTransfer() {
                 onClick={handleTransfer}
                 disabled={!canConfirm}
                 className="mt-3 w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl py-3 px-5 text-sm font-extrabold text-white shadow-md transition hover:shadow-lg disabled:opacity-60"
-                style={{ background: 'linear-gradient(135deg, #065f46, #059669)' }}
+                style={{ backgroundColor: '#059669' }}
                 title={!canConfirm ? 'Complete previous steps' : 'Confirm transfer'}
               >
                 <MdCheckCircle className="h-4 w-4" />

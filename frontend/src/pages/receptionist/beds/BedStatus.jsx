@@ -223,7 +223,7 @@ export default function BedStatus() {
           </div>
 
           {/* Highlights */}
-          {(icuIsFull || wardsLowAvailability.length || cleaningCount) && (
+          {!!(icuIsFull || wardsLowAvailability.length || cleaningCount) && (
             <div className="bs-highlights">
               {icuIsFull ? (
                 <div className="bs-pill bs-pillDanger">

@@ -183,19 +183,18 @@ export default function PatientHistory() {
   };
 
   return (
-    <div className="p-6 sm:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="p-6 space-y-6">
+      <div className="max-w-[1600px] mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-           
-            <Link to="/dashboard/admin/patients" className="text-xs font-semibold text-blue-600 hover:text-blue-800 mt-2 inline-block">
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900">{title}</h1>
+            <Link to="/dashboard/admin/patients" className="text-xs font-semibold text-[#0077B6] hover:text-[#00B4D8] mt-2 inline-block transition-colors">
               ← Back to all patients
             </Link>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl ring-1 ring-gray-200 shadow-sm p-5 sm:p-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
           <p className="text-sm font-semibold text-gray-800 mb-2">Find patient</p>
           <p className="text-xs text-gray-500 mb-3">Type at least 2 characters to search by name, UHID, or mobile.</p>
           <div className="relative max-w-xl">
@@ -204,10 +203,10 @@ export default function PatientHistory() {
               value={pickerQ}
               onChange={(e) => setPickerQ(e.target.value)}
               placeholder="Search to open history…"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0077B6]/25 focus:border-[#0077B6] transition"
             />
             {pickerQ.trim().length >= 2 && (
-              <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg max-h-64 overflow-y-auto">
+              <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-100 bg-white shadow-lg max-h-64 overflow-y-auto">
                 {pickerLoading ? (
                   <div className="px-3 py-3 text-xs text-gray-400">Searching…</div>
                 ) : pickerRows.length === 0 ? (
@@ -218,11 +217,11 @@ export default function PatientHistory() {
                       key={p.id}
                       type="button"
                       onClick={() => selectPatient(p.id)}
-                      className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 border-b border-gray-50 last:border-0"
+                      className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
                     >
                       <span className="font-semibold text-gray-900">{p.name}</span>
                       <span className="text-gray-400 mx-1">·</span>
-                      <span className="text-xs text-gray-500 font-mono">{p.uhid || p.id.slice(0, 8)}</span>
+                      <span className="text-xs text-[#0077B6] font-mono">{p.uhid || p.id.slice(0, 8)}</span>
                     </button>
                   ))
                 )}
@@ -238,7 +237,7 @@ export default function PatientHistory() {
         )}
 
         {patientIdParam && error && (
-          <div className="rounded-2xl bg-rose-50 text-rose-700 text-sm px-5 py-4 ring-1 ring-rose-100">{error}</div>
+          <div className="rounded-2xl bg-rose-50 text-rose-700 text-sm px-5 py-4 border border-rose-100">{error}</div>
         )}
 
         {patientIdParam && loading && !patient && (
@@ -247,7 +246,7 @@ export default function PatientHistory() {
 
         {patient && (
           <>
-            <div className="bg-white rounded-2xl ring-1 ring-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-lg font-bold text-gray-900">{patient.name}</p>
@@ -293,7 +292,7 @@ export default function PatientHistory() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl ring-1 ring-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-100">
                 <p className="text-sm font-semibold text-gray-800">Unified timeline</p>
                 <p className="text-xs text-gray-400 mt-0.5">Newest events first across all modules.</p>
@@ -303,7 +302,7 @@ export default function PatientHistory() {
                   <div className="px-5 py-8 text-sm text-gray-400">No activity recorded yet for this patient.</div>
                 ) : (
                   timeline.map((row) => (
-                    <div key={row.key} className="px-5 py-3 flex gap-4">
+                    <div key={row.key} className="px-5 py-3 flex gap-4 hover:bg-[#D6E8EE]/40 transition-colors">
                       <div className="shrink-0 w-36 text-xs text-gray-500 pt-0.5">{formatWhen(row.at)}</div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -319,16 +318,16 @@ export default function PatientHistory() {
             </div>
 
             <div className="grid lg:grid-cols-2 gap-6">
-              <section className="bg-white rounded-2xl ring-1 ring-gray-200 shadow-sm p-5">
-                <h2 className="text-sm font-semibold text-gray-800 mb-3">Recent consultations</h2>
+              <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <h2 className="text-sm font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-100">Recent consultations</h2>
                 <ul className="space-y-3 text-sm max-h-64 overflow-y-auto">
                   {(data.consultations || []).length === 0 ? (
-                    <li className="text-gray-400">None</li>
+                    <li className="text-gray-400 py-2">None</li>
                   ) : (
                     data.consultations.map((c) => (
-                      <li key={c.id} className="border-b border-gray-50 pb-3 last:border-0">
+                      <li key={c.id} className="border-b border-gray-100 pb-3 last:border-0 hover:bg-[#D6E8EE]/10 p-1.5 rounded transition">
                         <p className="text-xs text-gray-400">{formatWhen(c.createdAt)}</p>
-                        <p className="font-medium text-gray-900">{doctorName(c.doctor)}</p>
+                        <p className="font-semibold text-gray-900 mt-0.5">{doctorName(c.doctor)}</p>
                         <p className="text-xs text-gray-600 mt-1 line-clamp-2">{c.diagnosis}</p>
                         <p className="text-[11px] text-gray-400 mt-1">
                           Rx lines: {c.prescriptionSummary?.lines ?? 0} · {c.disposition}
@@ -338,16 +337,16 @@ export default function PatientHistory() {
                   )}
                 </ul>
               </section>
-              <section className="bg-white rounded-2xl ring-1 ring-gray-200 shadow-sm p-5">
-                <h2 className="text-sm font-semibold text-gray-800 mb-3">Recent admissions</h2>
+              <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <h2 className="text-sm font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-100">Recent admissions</h2>
                 <ul className="space-y-3 text-sm max-h-64 overflow-y-auto">
                   {(data.admissions || []).length === 0 ? (
-                    <li className="text-gray-400">None</li>
+                    <li className="text-gray-400 py-2">None</li>
                   ) : (
                     data.admissions.map((a) => (
-                      <li key={a.id} className="border-b border-gray-50 pb-3 last:border-0">
+                      <li key={a.id} className="border-b border-gray-100 pb-3 last:border-0 hover:bg-[#D6E8EE]/10 p-1.5 rounded transition">
                         <p className="text-xs text-gray-400">{formatWhen(a.admissionDate)}</p>
-                        <p className="font-medium text-gray-900">{a.ipdNumber || a.status}</p>
+                        <p className="font-semibold text-gray-900 mt-0.5">{a.ipdNumber || a.status}</p>
                         <p className="text-xs text-gray-600 mt-1">
                           {[a.ward?.name, a.bed?.code, doctorName(a.doctor)].filter(Boolean).join(' · ')}
                         </p>

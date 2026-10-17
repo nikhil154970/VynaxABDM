@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { MdReceiptLong, MdScience, MdCheckCircle, MdWarningAmber, MdRefresh, MdArrowForward } from 'react-icons/md';
 import api from '../../../utils/api';
+import PatientBillingLedger from '../../../components/PatientBillingLedger';
+import PatientLabReportsPanel from '../../../components/PatientLabReportsPanel';
 import './TodayDischarge.css';
 
 function formatApprovalTime(iso) {
@@ -24,10 +27,7 @@ function wardLine(ward) {
   return name ? `${name} (${cat})` : cat;
 }
 
-function moneyInr(n) {
-  const x = Math.max(0, Number(n) || 0);
-  return `₹${x.toLocaleString('en-IN')}`;
-}
+const inr = (n) => `₹${Math.max(0, Number(n) || 0).toLocaleString('en-IN')}`;
 
 export default function DischargeProcessDetail() {
   const { id } = useParams();
@@ -39,17 +39,13 @@ export default function DischargeProcessDetail() {
   const [clearLoading, setClearLoading] = useState(false);
   const [clearances, setClearances] = useState(null);
   const [clearError, setClearError] = useState('');
+  const [ledgerReloadToken, setLedgerReloadToken] = useState(0);
 
   const fromState = location.state?.patient;
-  const clearanceMessage = location.state?.clearanceMessage;
-  const clearanceBlocked = Boolean(location.state?.clearanceBlocked);
 
+  // Always resolve the admission (need patientId for the ledger + lab reports, and to
+  // confirm the admission is still in nurse-approved status).
   useEffect(() => {
-    if (fromState && String(fromState.id) === String(id)) {
-      setFetchedPatient(null);
-      setFetchError('');
-      return;
-    }
     let alive = true;
     (async () => {
       if (!id) return;
@@ -58,31 +54,27 @@ export default function DischargeProcessDetail() {
       try {
         const res = await api.get(`/receptionist/ipd/admissions/${encodeURIComponent(id)}`);
         const adm = res?.data?.admission;
-        if (!alive || !adm) {
-          if (alive) setFetchedPatient(null);
+        if (!alive) return;
+        if (!adm) {
+          setFetchedPatient(null);
           return;
         }
         if (String(adm.status || '').toUpperCase() !== 'DISCHARGE_REQUESTED') {
-          if (alive) {
-            setFetchedPatient(null);
-            setFetchError('This admission is not in nurse-approved discharge status.');
-          }
+          setFetchedPatient(null);
+          setFetchError('This admission is not in nurse-approved discharge status.');
           return;
         }
-        const nurseName = adm.nurse?.name || adm.nurse?.email || '—';
-        if (alive) {
-          setFetchedPatient({
-            id: adm.id,
-            name: adm.patient?.name || '',
-            uhid: adm.patient?.uhid || '',
-            ward: wardLine(adm.ward),
-            bed: adm.bed?.code || '—',
-            dischargeApproved: true,
-            approvedBy: nurseName,
-            approvalTime: adm.dischargeRequestedAt || null,
-            doctor: adm.doctor?.user?.name || '',
-          });
-        }
+        setFetchedPatient({
+          id: adm.id,
+          patientId: adm.patient?.id || adm.patientId || fromState?.patientId || '',
+          name: adm.patient?.name || fromState?.name || '',
+          uhid: adm.patient?.uhid || fromState?.uhid || '',
+          ward: wardLine(adm.ward),
+          bed: adm.bed?.code || '—',
+          approvedBy: adm.nurse?.name || adm.nurse?.email || fromState?.approvedBy || '—',
+          approvalTime: adm.dischargeRequestedAt || fromState?.approvalTime || null,
+          doctor: adm.doctor?.user?.name || fromState?.doctor || '',
+        });
       } catch (e) {
         if (alive) {
           setFetchedPatient(null);
@@ -97,37 +89,11 @@ export default function DischargeProcessDetail() {
     };
   }, [id, fromState]);
 
-  const patient = useMemo(() => {
-    if (fromState && String(fromState.id) === String(id)) return fromState;
-    return fetchedPatient;
-  }, [id, fromState, fetchedPatient]);
+  const patient = fetchedPatient;
+  const patientId = fetchedPatient?.patientId || fromState?.patientId || '';
 
-  useEffect(() => {
-    if (!id || !patient) return;
-    let alive = true;
-    (async () => {
-      setClearLoading(true);
-      setClearError('');
-      setClearances(null);
-      try {
-        const res = await api.get(`/receptionist/ipd/admissions/${encodeURIComponent(id)}/discharge-clearances`);
-        if (!alive) return;
-        setClearances(res?.data || null);
-      } catch (e) {
-        if (!alive) return;
-        setClearances(null);
-        setClearError(e?.response?.data?.message || e?.message || 'Could not verify clearances');
-      } finally {
-        if (alive) setClearLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [id, patient]);
-
-  const refreshClearances = async () => {
-    if (!id || !patient) return;
+  const loadClearances = useCallback(async () => {
+    if (!id) return;
     setClearLoading(true);
     setClearError('');
     try {
@@ -139,14 +105,43 @@ export default function DischargeProcessDetail() {
     } finally {
       setClearLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (patient) loadClearances();
+  }, [patient, loadClearances]);
 
   const allReady = Boolean(clearances?.allClear) && !clearLoading && !clearError;
   const mayDuesPath = Boolean(clearances?.mayDischargeWithBillingDues) && !clearLoading && !clearError;
-  /** Same rule as document-generation step: nursing + lab clear; billing may have dues. */
   const canOpenDocuments = (allReady || mayDuesPath) && !clearLoading && !clearError;
-  const blockingBills = Array.isArray(clearances?.blockingBills) ? clearances.blockingBills : [];
-  const blockingLab = Array.isArray(clearances?.blockingLabOrders) ? clearances.blockingLabOrders : [];
+  const totalOutstanding = clearances?.billingSummary?.totalOutstanding ?? clearances?.billingPendingTotal ?? 0;
+
+  const openDischargeForm = useCallback(() => {
+    // Skip the intermediate document + final-discharge screens — open the
+    // discharge summary form directly. Billing tracking + lab reports are
+    // already shown on this page.
+    navigate(`/dashboard/reception/ipd/discharge/summary/${encodeURIComponent(id)}`, {
+      state: {
+        patient,
+        fromProcess: true,
+        dischargeWithDues: Boolean(mayDuesPath && !allReady),
+      },
+    });
+  }, [navigate, id, patient, mayDuesPath, allReady]);
+
+  // When payment is collected inline in the ledger, re-verify clearances automatically.
+  const handleAfterPayment = useCallback(() => {
+    setLedgerReloadToken((t) => t + 1);
+    loadClearances();
+  }, [loadClearances]);
+
+  const verdict = useMemo(() => {
+    if (clearLoading) return { tone: 'checking', text: 'Verifying clearances…' };
+    if (clearError) return { tone: 'bad', text: clearError };
+    if (allReady) return { tone: 'ok', text: 'All dues cleared & lab billing settled — ready for discharge.' };
+    if (mayDuesPath) return { tone: 'warn', text: 'Nursing & lab cleared. Billing dues remain — you may proceed and collect at discharge.' };
+    return { tone: 'bad', text: `Pending dues / unbilled lab found${totalOutstanding ? ` · outstanding ${inr(totalOutstanding)}` : ''}. Collect below, then refresh.` };
+  }, [clearLoading, clearError, allReady, mayDuesPath, totalOutstanding]);
 
   return (
     <div className="today-discharge-container today-discharge-container--detail">
@@ -179,193 +174,124 @@ export default function DischargeProcessDetail() {
         {!loading && !patient && !fetchError ? (
           <div className="today-discharge-card">
             <div className="today-discharge-empty today-discharge-empty--detail">Patient not found or not approved for discharge.</div>
-            <button
-              type="button"
-              className="today-discharge-btn today-discharge-btn--secondary"
-              onClick={() => navigate('/dashboard/reception/ipd/today-discharge')}
-            >
-              Return to today&apos;s discharge
-            </button>
           </div>
         ) : null}
 
         {!loading && patient ? (
-          <section className="today-discharge-card today-discharge-detail-card">
-            <div className="today-discharge-cardHeader">
-              <p className="today-discharge-stepHint">Step 1 of 3 · Clearances</p>
-              <h1 className="today-discharge-detail-title">Discharge · {patient.name}</h1>
-              <p className="today-discharge-cardSub">
-                <span className="today-discharge-mono">{patient.uhid}</span>
-                <span className="today-discharge-sep"> · </span>
-                {patient.ward} / {patient.bed}
-              </p>
-            </div>
-            <dl className="today-discharge-detailGrid">
-              <div>
-                <dt className="today-discharge-dt">Treating doctor</dt>
-                <dd className="today-discharge-dd">{patient.doctor || '—'}</dd>
-              </div>
-              <div>
-                <dt className="today-discharge-dt">Nurse approval</dt>
-                <dd className="today-discharge-dd">{patient.approvedBy || '—'}</dd>
-              </div>
-              <div>
-                <dt className="today-discharge-dt">Approval time</dt>
-                <dd className="today-discharge-dd">{formatApprovalTime(patient.approvalTime)}</dd>
-              </div>
-            </dl>
-
-            {clearanceMessage ? (
-              <div className="today-discharge-bannerAlert" role="status">
-                {clearanceMessage}
-              </div>
-            ) : null}
-
-            {clearanceBlocked && !clearanceMessage ? (
-              <div className="today-discharge-bannerAlert" role="status">
-                Clear dues, then refresh.
-              </div>
-            ) : null}
-
-            <div className="today-discharge-cardHeader today-discharge-cardHeader--row" style={{ marginTop: 14, borderTop: '1px solid rgba(15,23,42,0.06)' }}>
-              <div>
-                <h2 className="today-discharge-cardTitle" style={{ margin: 0 }}>
-                  Clearances
-                </h2>
-              </div>
-              <button type="button" className="today-discharge-btn today-discharge-btn--ghost" onClick={refreshClearances} disabled={clearLoading}>
-                {clearLoading ? 'Checking…' : 'Refresh'}
-              </button>
-            </div>
-
-            {clearError ? (
-              <div className="today-discharge-empty today-discharge-empty--error" style={{ margin: '12px 18px' }} role="alert">
-                {clearError}
-              </div>
-            ) : null}
-
-            <div className="today-discharge-clearanceGrid">
-              <div className={`today-discharge-clearCard ${clearances?.nursingClearance ? 'today-discharge-clearCard--ok' : 'today-discharge-clearCard--bad'}`}>
-                <p className="today-discharge-clearTitle">1 · Nursing clearance</p>
-                <div className="today-discharge-clearStatus">
-                  <span className={`today-discharge-clearDot ${clearances?.nursingClearance ? 'today-discharge-clearDot--ok' : 'today-discharge-clearDot--bad'}`} />
-                  {clearLoading ? 'Verifying…' : clearances?.nursingClearance ? 'Cleared' : 'Pending'}
+          <div className="flex flex-col gap-4">
+            {/* Patient header */}
+            <section className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h1 className="text-lg font-extrabold text-gray-900">Discharge · {patient.name}</h1>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    <span className="font-mono font-bold text-blue-600">{patient.uhid}</span> · {patient.ward} / {patient.bed}
+                  </p>
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Doctor: {patient.doctor || '—'} · Nurse approval: {patient.approvedBy || '—'} · {formatApprovalTime(patient.approvalTime)}
+                  </p>
                 </div>
-                {clearances?.nursingClearance ? (
-                  <p className="today-discharge-clearDetail">Nurse discharge on file.</p>
-                ) : null}
+                <button
+                  type="button"
+                  onClick={loadClearances}
+                  disabled={clearLoading}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-extrabold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <MdRefresh className={`h-4 w-4 ${clearLoading ? 'animate-spin' : ''}`} />
+                  Re-check
+                </button>
               </div>
 
-              <div className={`today-discharge-clearCard ${clearances?.billingClearance ? 'today-discharge-clearCard--ok' : 'today-discharge-clearCard--bad'}`}>
-                <p className="today-discharge-clearTitle">2 · Billing clearance</p>
-                <div className="today-discharge-clearStatus">
-                  <span className={`today-discharge-clearDot ${clearances?.billingClearance ? 'today-discharge-clearDot--ok' : 'today-discharge-clearDot--bad'}`} />
-                  {clearLoading ? 'Verifying…' : clearances?.billingClearance ? 'All bills settled' : 'Dues on file'}
-                </div>
-                {clearances && !clearances.billingClearance ? (
-                  <p className="today-discharge-clearDetail">Outstanding: {moneyInr(clearances.billingPendingTotal || 0)}</p>
-                ) : null}
-              </div>
-
-              <div className={`today-discharge-clearCard ${clearances?.labClearance ? 'today-discharge-clearCard--ok' : 'today-discharge-clearCard--bad'}`}>
-                <p className="today-discharge-clearTitle">3 · Lab billing clearance</p>
-                <div className="today-discharge-clearStatus">
-                  <span className={`today-discharge-clearDot ${clearances?.labClearance ? 'today-discharge-clearDot--ok' : 'today-discharge-clearDot--bad'}`} />
-                  {clearLoading ? 'Verifying…' : clearances?.labClearance ? 'No pending lab billing' : 'Lab orders need billing'}
-                </div>
-                {clearances && !clearances.labClearance ? <p className="today-discharge-clearDetail">Complete lab billing first.</p> : null}
-              </div>
-
+              {/* Verdict + discharge CTA */}
               <div
-                className={`today-discharge-clearCard ${
-                  clearances?.pharmacyDue?.pendingAmount > 0 ? 'today-discharge-clearCard--bad' : 'today-discharge-clearCard--ok'
+                className={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5 ${
+                  verdict.tone === 'ok'
+                    ? 'border-emerald-200 bg-emerald-50'
+                    : verdict.tone === 'warn'
+                      ? 'border-amber-200 bg-amber-50'
+                      : verdict.tone === 'bad'
+                        ? 'border-rose-200 bg-rose-50'
+                        : 'border-slate-200 bg-slate-50'
                 }`}
               >
-                <p className="today-discharge-clearTitle">4 · Pharmacy dues</p>
-                <div className="today-discharge-clearStatus">
-                  <span
-                    className={`today-discharge-clearDot ${
-                      clearances?.pharmacyDue?.pendingAmount > 0 ? 'today-discharge-clearDot--bad' : 'today-discharge-clearDot--ok'
+                <div className="flex items-center gap-2 min-w-0">
+                  {verdict.tone === 'ok' ? (
+                    <MdCheckCircle className="h-5 w-5 shrink-0 text-emerald-600" />
+                  ) : (
+                    <MdWarningAmber className={`h-5 w-5 shrink-0 ${verdict.tone === 'bad' ? 'text-rose-600' : 'text-amber-600'}`} />
+                  )}
+                  <p
+                    className={`text-sm font-bold ${
+                      verdict.tone === 'ok'
+                        ? 'text-emerald-800'
+                        : verdict.tone === 'warn'
+                          ? 'text-amber-800'
+                          : verdict.tone === 'bad'
+                            ? 'text-rose-800'
+                            : 'text-slate-700'
                     }`}
-                  />
-                  {clearLoading
-                    ? 'Verifying…'
-                    : clearances?.pharmacyDue?.pendingAmount > 0
-                      ? 'Pending pharmacy dues'
-                      : 'No pharmacy dues'}
+                  >
+                    {verdict.text}
+                  </p>
                 </div>
-                {clearances?.pharmacyDue?.pendingAmount > 0 ? (
-                  <>
-                    <p className="today-discharge-clearDetail">
-                      Pharmacy Due: {moneyInr(clearances.pharmacyDue.pendingAmount)}
-                    </p>
-                    <p className="today-discharge-clearDetail" style={{ color: '#b45309', fontWeight: 600 }}>
-                      Patient has pending pharmacy dues.
-                    </p>
-                  </>
-                ) : null}
+                <button
+                  type="button"
+                  disabled={!canOpenDocuments}
+                  onClick={openDischargeForm}
+                  title={canOpenDocuments ? 'Open the discharge form' : 'Clear pending dues / lab billing first, then Re-check.'}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-extrabold text-white shadow transition ${
+                    canOpenDocuments ? 'bg-emerald-600 hover:bg-emerald-700' : 'cursor-not-allowed bg-gray-300'
+                  }`}
+                >
+                  Open discharge summary form <MdArrowForward className="h-4 w-4" />
+                </button>
+              </div>
+            </section>
+
+            {/* Billing & payment tracking */}
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <MdReceiptLong className="h-4 w-4 text-slate-600" />
+                <h2 className="text-sm font-extrabold text-gray-800">Payment tracking — kaha kya paid, kya pending</h2>
+              </div>
+              {patientId ? (
+                <PatientBillingLedger patientId={patientId} reloadToken={ledgerReloadToken} onAfterPayment={handleAfterPayment} />
+              ) : (
+                <p className="rounded-xl border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-400">
+                  Billing history unavailable — patient id missing.
+                </p>
+              )}
+            </div>
+
+            {/* Lab reports */}
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <MdScience className="h-4 w-4 text-slate-600" />
+                <h2 className="text-sm font-extrabold text-gray-800">Lab reports</h2>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-white p-2">
+                {patientId ? (
+                  <PatientLabReportsPanel patientId={patientId} embedded />
+                ) : (
+                  <p className="px-4 py-6 text-center text-sm text-gray-400">Lab reports unavailable — patient id missing.</p>
+                )}
               </div>
             </div>
 
-            {!clearLoading && clearances?.pharmacyDue?.pendingAmount > 0 && clearances.pharmacyDue.bills?.length > 0 ? (
-              <div className="today-discharge-blockList">
-                <h3>Pharmacy bills — pending payment</h3>
-                <ul>
-                  {clearances.pharmacyDue.bills.map((b) => (
-                    <li key={b.id}>
-                      Bill {b.billNumber}: pending {moneyInr(b.pendingAmount)} (paid {moneyInr(b.paidAmount)} / total{' '}
-                      {moneyInr(b.grandTotal ?? b.totalAmount)})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {!clearLoading && blockingBills.length > 0 ? (
-              <div className="today-discharge-blockList">
-                <h3>Unpaid or partially paid bills</h3>
-                <ul>
-                  {blockingBills.map((b) => (
-                    <li key={b.id}>
-                      {String(b.visitType || '').toUpperCase() === 'IPD' ? 'IPD' : 'OPD'} bill {b.billNumber || b.id}: pending{' '}
-                      {moneyInr(b.pending)} (paid {moneyInr(b.paidAmount)} / total {moneyInr(b.totalAmount)})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {!clearLoading && blockingLab.length > 0 ? (
-              <div className="today-discharge-blockList">
-                <h3>Lab orders — pending billing</h3>
-                <ul>
-                  {blockingLab.map((lo) => (
-                    <li key={lo.id}>
-                      Order {lo.orderNumber || lo.id}: {lo.reason}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            <div className="today-discharge-detailActions" style={{ justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+            {/* Bottom discharge CTA (repeat for convenience after scrolling) */}
+            <div className="flex justify-end">
               <button
                 type="button"
-                className={`today-discharge-btn ${canOpenDocuments ? '' : 'today-discharge-btn--muted'}`}
                 disabled={!canOpenDocuments}
-                title={
-                  canOpenDocuments ? '' : 'Nursing / lab billing clearances still pending — fix and tap Refresh.'
-                }
-                onClick={() =>
-                  navigate(`/dashboard/reception/ipd/discharge/documents/${encodeURIComponent(patient.id)}`, {
-                    state: { patient },
-                  })
-                }
+                onClick={openDischargeForm}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-sm font-extrabold text-white shadow transition ${
+                  canOpenDocuments ? 'bg-emerald-600 hover:bg-emerald-700' : 'cursor-not-allowed bg-gray-300'
+                }`}
               >
-                Continue to document generation
+                Open discharge summary form <MdArrowForward className="h-4 w-4" />
               </button>
             </div>
-          </section>
+          </div>
         ) : null}
       </div>
     </div>

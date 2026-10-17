@@ -1,39 +1,56 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   getLoadingState,
   isGlobalLoading,
+  resetGlobalLoading,
   subscribeLoading,
   stopNavigationLoading,
 } from '../utils/loadingBus';
+
+const MAX_LOADING_MS = 8000;
 
 export default function GlobalLoader({ scope = 'fullscreen' }) {
   const location = useLocation();
   const [loading, setLoading] = useState(() => isGlobalLoading(getLoadingState()));
   const [visible, setVisible] = useState(false);
+  const forceHideRef = useRef(false);
+  const maxTimerRef = useRef(null);
 
   useEffect(() => {
-    return subscribeLoading((s) => setLoading(isGlobalLoading(s)));
+    return subscribeLoading((s) => {
+      const isLoading = isGlobalLoading(s);
+      if (!isLoading) forceHideRef.current = false;
+      setLoading(isLoading);
+    });
   }, []);
 
-  // Avoid flashing on fast navigations/requests.
+  // Auto-force-hide if loading stays true beyond MAX_LOADING_MS
   useEffect(() => {
     if (!loading) {
       setVisible(false);
+      clearTimeout(maxTimerRef.current);
       return;
     }
-    const t = setTimeout(() => setVisible(true), 150);
-    return () => clearTimeout(t);
+    if (forceHideRef.current) return;
+    const d = setTimeout(() => setVisible(true), 150);
+    maxTimerRef.current = setTimeout(() => {
+      forceHideRef.current = true;
+      resetGlobalLoading();
+      setLoading(false);
+    }, MAX_LOADING_MS);
+    return () => {
+      clearTimeout(d);
+      clearTimeout(maxTimerRef.current);
+    };
   }, [loading]);
 
   // When route changes, stop the "navigation" loader immediately.
   useEffect(() => {
     stopNavigationLoading();
-    const t = setTimeout(() => stopNavigationLoading(), 1200); // fallback if something gets stuck
-    return () => clearTimeout(t);
   }, [location.pathname]);
 
-  if (!loading || !visible) return null;
+  if ((!loading && !visible) || forceHideRef.current) return null;
 
   const overlayPosition = scope === 'container' ? 'absolute' : 'fixed';
 

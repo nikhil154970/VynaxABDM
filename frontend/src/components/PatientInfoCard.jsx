@@ -6,7 +6,7 @@ export default function PatientInfoCard({ patient }) {
       : '—';
 
   return (
-    <div className="rounded-2xl border px-6 py-4" style={{ background: '#FFFFFF', borderColor: 'rgba(0,0,0,0.06)' }}>
+    <div className="rounded-2xl border px-6 py-4" style={{ background: '#FFFFFF', borderColor: '#e0e7ff' }}>
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="min-w-0">
           <p className="text-lg font-extrabold text-gray-900 truncate">{patient.name || '—'}</p>

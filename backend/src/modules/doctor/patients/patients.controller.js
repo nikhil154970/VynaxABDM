@@ -30,13 +30,28 @@ async function getHistoryByUHID(req, res) {
   const doctorId = await getDoctorIdFromUser(req);
   if (!doctorId) return res.status(404).json({ message: 'Doctor profile not found' });
 
-  const uhid = String(req.params.uhid || '').trim();
-  if (!uhid) return res.status(400).json({ message: 'UHID is required' });
+  const query = String(req.params.uhid || '').trim();
+  if (!query) return res.status(400).json({ message: 'UHID or patient name is required' });
 
-  const patient = await prisma.patient.findUnique({
-    where: { uhid },
-    select: { id: true, name: true, uhid: true, age: true, gender: true, mobile: true },
+  const patientSelect = { id: true, name: true, uhid: true, age: true, gender: true, mobile: true };
+  let patient = await prisma.patient.findFirst({
+    where: { uhid: { equals: query, mode: 'insensitive' } },
+    select: patientSelect,
   });
+  if (!patient) {
+    patient = await prisma.patient.findFirst({
+      where: {
+        OR: [
+          { name: { equals: query, mode: 'insensitive' } },
+          { name: { contains: query, mode: 'insensitive' } },
+          { uhid: { contains: query, mode: 'insensitive' } },
+          { registrationNumber: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      select: patientSelect,
+    });
+  }
   if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
   const [consultations, admissions] = await Promise.all([
@@ -141,5 +156,75 @@ async function getFullHistoryByPatientId(req, res) {
   });
 }
 
-module.exports = { getHistoryByUHID, getFullHistoryByPatientId };
+async function searchPatients(req, res) {
+  const doctorId = await getDoctorIdFromUser(req);
+  if (!doctorId) return res.status(404).json({ message: 'Doctor profile not found' });
+
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.json({ items: [] });
+
+  const patients = await prisma.patient.findMany({
+    where: {
+      AND: [
+        {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { uhid: { contains: q, mode: 'insensitive' } },
+            { registrationNumber: { contains: q, mode: 'insensitive' } },
+            { mobile: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        {
+          OR: [
+            { consultations: { some: { doctorId } } },
+            { admissions: { some: { doctorId } } },
+          ],
+        },
+      ],
+    },
+    orderBy: [{ createdAt: 'desc' }],
+    take: 10,
+    select: {
+      id: true,
+      name: true,
+      uhid: true,
+      registrationNumber: true,
+      mobile: true,
+      age: true,
+      gender: true,
+      consultations: {
+        where: { doctorId },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { createdAt: true },
+      },
+      admissions: {
+        where: { doctorId },
+        orderBy: [{ admissionDate: 'desc' }, { createdAt: 'desc' }],
+        take: 1,
+        select: { admissionDate: true, createdAt: true },
+      },
+    },
+  });
+
+  const items = patients.map((p) => {
+    const latestConsult = p.consultations?.[0]?.createdAt || null;
+    const latestAdmission = p.admissions?.[0]?.admissionDate || p.admissions?.[0]?.createdAt || null;
+    const latestVisit = latestConsult || latestAdmission;
+    return {
+      id: p.id,
+      name: p.name,
+      uhid: p.uhid || '',
+      registrationNumber: p.registrationNumber || '',
+      mobile: p.mobile || '',
+      age: p.age ?? null,
+      gender: p.gender ?? null,
+      latestVisit,
+    };
+  });
+
+  return res.json({ items });
+}
+
+module.exports = { getHistoryByUHID, getFullHistoryByPatientId, searchPatients };
 

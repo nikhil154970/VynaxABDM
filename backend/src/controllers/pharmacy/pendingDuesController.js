@@ -71,6 +71,7 @@ async function fetchPendingBills(extraWhere = {}) {
     where: {
       status: { in: PENDING_BILL_STATUSES },
       pendingAmount: { gt: 0 },
+      NOT: { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
       ...extraWhere,
     },
     orderBy: { createdAt: 'desc' },

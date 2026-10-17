@@ -365,7 +365,6 @@ export default function DischargeSummaryEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const fromFinalDischarge = Boolean(location.state?.fromFinalDischarge);
   const editFromHistory = Boolean(location.state?.editSummary);
   const dischargeWithDuesFromState = Boolean(location.state?.dischargeWithDues);
   const historySummaryFromState = location.state?.dischargeSummary;
@@ -614,10 +613,11 @@ export default function DischargeSummaryEditor() {
       }
 
       setSaveOk('Summary saved.');
-      navigate(`/dashboard/reception/ipd/discharge/final/${encodeURIComponent(id)}`, {
+      navigate(`/dashboard/reception/ipd/discharge/process/${encodeURIComponent(id)}`, {
         state: {
           patient: {
             id,
+            patientId: admissionData?.patient?.id || '',
             name: admissionData?.patient?.name || summary?.patientInformation?.patientName || '',
             uhid: summary?.uhidNo || admissionData?.patient?.uhid || '',
             ward: admissionData?.clearances?.ward || admissionData?.ward?.name || '',
@@ -743,17 +743,11 @@ export default function DischargeSummaryEditor() {
             navigate(
               editFromHistory
                 ? '/dashboard/reception/ipd/discharge/history'
-                : fromFinalDischarge
-                  ? `/dashboard/reception/ipd/discharge/final/${encodeURIComponent(id)}`
-                  : `/dashboard/reception/ipd/discharge/documents/${encodeURIComponent(id)}`,
+                : `/dashboard/reception/ipd/discharge/process/${encodeURIComponent(id)}`,
             )
           }
         >
-          {editFromHistory
-            ? '← Back to discharge history'
-            : fromFinalDischarge
-              ? '← Back to final discharge'
-              : '← Back to document generation'}
+          {editFromHistory ? '← Back to discharge history' : '← Back to discharge review'}
         </button>
 
         <header className="dse-hero">
@@ -1307,11 +1301,9 @@ export default function DischargeSummaryEditor() {
 
           <section className="dse-card dse-card--full">
             <SectionTitle>Signatures</SectionTitle>
-            <p className="dse-hint" style={{ marginBottom: '0.75rem' }}>
-              Print slip par signature area khali rahegi (line nahi). Hospital stamp ke liye badi jagah — stamp yahan laga sakte hain.
-            </p>
+  
             <div className="dse-twoCol">
-              <Field label="Patient Signature (optional — print par khali jagah)">
+              <Field label="Patient Signature ">
                 <Input
                   value={summary.signatures.patientSignature}
                   onChange={(v) =>
@@ -1322,7 +1314,7 @@ export default function DischargeSummaryEditor() {
                   }
                 />
               </Field>
-              <Field label="Doctor Signature (optional — print par khali jagah)">
+              <Field label="Doctor Signature">
                 <Input
                   value={summary.signatures.doctorSignature}
                   onChange={(v) =>
@@ -1334,7 +1326,7 @@ export default function DischargeSummaryEditor() {
                 />
               </Field>
             </div>
-            <Field label="Hospital Stamp (optional text — print par badi khali cell)">
+            <Field label="Hospital Stamp ">
               <Input
                 value={summary.signatures.hospitalStamp}
                 onChange={(v) =>

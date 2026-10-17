@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import {
@@ -20,99 +20,26 @@ import {
 } from 'react-icons/md';
 import './PatientList.css';
 import api from '../../../utils/api';
+import {
+  ABDM_LINK_LABEL,
+  abdmCareContextLabel,
+  abdmLinkTokenLabel,
+  abdmLinkUserMessage,
+  getHipPatientStatus,
+  linkHipPatient,
+  readAbdmLinkState,
+  retryContextNotify,
+  shouldRetryContextNotify,
+  shouldStopAbdmPoll,
+} from '../../../services/abdm/abhaService';
+import AbdmPatientRecordSync from '../../../components/abdm/AbdmPatientRecordSync';
 import { downloadPatientListCsv } from '../../../utils/exportPatientListCsv';
 import { DEPARTMENTS_WITH_ALL } from '../../../constants/departments';
 
 const STORAGE_KEYS = ['patients', 'hims_patients']; // supports both legacy + new key
 
 // UI testing dummy data (used only when storage is empty)
-const DUMMY_PATIENTS = [
-  {
-    uhid: 'UH202604180123',
-    name: 'Ravi Kumar',
-    phone: '9876543210',
-    dob: '1992-03-12',
-    age: '34',
-    gender: 'Male',
-    address: 'Ward 6, Naitik Nagar',
-    visitType: 'OPD',
-    department: 'General Medicine',
-    doctor: 'Dr. Sharma',
-    visitDate: '2026-04-18',
-    token: 'T-001',
-    paymentStatus: 'Paid',
-    status: 'Waiting',
-    createdAt: '2026-04-18T08:10:00.000Z',
-  },
-  {
-    uhid: 'UH202604180124',
-    name: 'Priya Singh',
-    phone: '9123456780',
-    dob: '1998-09-02',
-    age: '28',
-    gender: 'Female',
-    address: 'Shastri Colony, Naitik',
-    visitType: 'OPD',
-    department: 'Gynecology',
-    doctor: 'Dr. Gupta',
-    visitDate: '2026-04-18',
-    token: 'T-002',
-    paymentStatus: 'Pending',
-    status: 'Waiting',
-    createdAt: '2026-04-18T08:22:00.000Z',
-  },
-  {
-    uhid: 'UH202604170987',
-    name: 'Mohan Das',
-    phone: '9988776655',
-    dob: '1974-01-25',
-    age: '52',
-    gender: 'Male',
-    address: 'Station Road, Naitik',
-    visitType: 'IPD',
-    department: 'Cardiology',
-    doctor: 'Dr. Kapoor',
-    visitDate: '2026-04-17',
-    token: 'T-006',
-    paymentStatus: 'Paid',
-    status: 'Admitted',
-    createdAt: '2026-04-17T10:05:00.000Z',
-  },
-  {
-    uhid: 'UH202604160555',
-    name: 'Sunita Gupta',
-    phone: '8877665544',
-    dob: '1981-08-14',
-    age: '45',
-    gender: 'Female',
-    address: 'Green Park, Naitik',
-    visitType: 'IPD',
-    department: 'General Medicine',
-    doctor: 'Dr. Verma',
-    visitDate: '2026-04-16',
-    token: 'T-011',
-    paymentStatus: 'Paid',
-    status: 'Admitted',
-    createdAt: '2026-04-16T12:20:00.000Z',
-  },
-  {
-    uhid: 'UH202604120042',
-    name: 'Arjun Yadav',
-    phone: '7766554433',
-    dob: '1997-11-21',
-    age: '29',
-    gender: 'Male',
-    address: 'Old City, Naitik',
-    visitType: 'OPD',
-    department: 'Orthopedics',
-    doctor: 'Dr. Mehta',
-    visitDate: '2026-04-12',
-    token: 'T-019',
-    paymentStatus: 'Paid',
-    status: 'Discharged',
-    createdAt: '2026-04-12T09:12:00.000Z',
-  },
-];
+
 
 const STATUS_META = {
   Waiting: { bg: '#fef9c3', text: '#854d0e', dot: '#eab308' },
@@ -207,13 +134,17 @@ export default function PatientList() {
   const [gender, setGender] = useState('All');
   const [department, setDepartment] = useState('All');
   const [dateFilter, setDateFilter] = useState('All');
-  const [customDate, setCustomDate] = useState(todayISO);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const [selected, setSelected] = useState(null);
   const [selectedDetails, setSelectedDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [abdmLive, setAbdmLive] = useState(null);
+  const [abdmRetrying, setAbdmRetrying] = useState(false);
+  const abdmPollRef = useRef(null);
 
   const [page, setPage] = useState(1);
   const [downloading, setDownloading] = useState(false);
@@ -222,14 +153,23 @@ export default function PatientList() {
   const fetchPatients = async () => {
     setLoading(true);
     try {
-      const dateToMatch = dateFilter === 'Today' ? todayISO : dateFilter === 'Custom' ? customDate : '';
+      let df = undefined;
+      let dt = undefined;
+      if (dateFilter === 'Today') {
+        df = todayISO;
+        dt = todayISO;
+      } else if (dateFilter === 'Custom') {
+        df = dateFrom || undefined;
+        dt = dateTo || undefined;
+      }
       const res = await api.get('/receptionist/patients', {
         params: {
           q: search || undefined,
           visitType,
           gender,
           department,
-          date: dateToMatch || undefined,
+          dateFrom: df,
+          dateTo: dt,
           page,
           pageSize,
         },
@@ -244,7 +184,7 @@ export default function PatientList() {
   useEffect(() => {
     fetchPatients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, visitType, gender, department, dateFilter, customDate, page]);
+  }, [search, visitType, gender, department, dateFilter, dateFrom, dateTo, page]);
 
   const handleSearch = (value) => {
     setSearch(value);
@@ -256,14 +196,23 @@ export default function PatientList() {
     if (key === 'gender') setGender(value);
     if (key === 'department') setDepartment(value);
     if (key === 'dateFilter') setDateFilter(value);
-    if (key === 'customDate') setCustomDate(value);
+    if (key === 'dateFrom') setDateFrom(value);
+    if (key === 'dateTo') setDateTo(value);
     setPage(1);
   };
 
   const handleDownloadList = async () => {
     setDownloading(true);
     try {
-      const dateToMatch = dateFilter === 'Today' ? todayISO : dateFilter === 'Custom' ? customDate : '';
+      let df = undefined;
+      let dt = undefined;
+      if (dateFilter === 'Today') {
+        df = todayISO;
+        dt = todayISO;
+      } else if (dateFilter === 'Custom') {
+        df = dateFrom || undefined;
+        dt = dateTo || undefined;
+      }
       const params = {
         export: '1',
         page: 1,
@@ -273,7 +222,8 @@ export default function PatientList() {
       if (visitType && visitType !== 'All') params.visitType = visitType;
       if (gender && gender !== 'All') params.gender = gender;
       if (department && department !== 'All') params.department = department;
-      if (dateToMatch) params.date = dateToMatch;
+      if (df) params.dateFrom = df;
+      if (dt) params.dateTo = dt;
 
       const res = await api.get('/receptionist/patients', { params });
       const items = Array.isArray(res?.data?.items) ? res.data.items : [];
@@ -290,7 +240,7 @@ export default function PatientList() {
         .filter(Boolean)
         .join('_');
       downloadPatientListCsv(items, {
-        filename: `ht-hospital-patients${filterTag ? `-${filterTag}` : ''}-${todayISO}.csv`,
+        filename: `vyanx-patients${filterTag ? `-${filterTag}` : ''}-${todayISO}.csv`,
       });
     } catch (e) {
       window.alert(e?.response?.data?.message || e?.message || 'Download failed.');
@@ -299,20 +249,107 @@ export default function PatientList() {
     }
   };
 
+  const stopAbdmPoll = () => {
+    if (abdmPollRef.current) {
+      clearInterval(abdmPollRef.current);
+      abdmPollRef.current = null;
+    }
+  };
+
+  useEffect(() => () => stopAbdmPoll(), []);
+
   const handleViewPatient = (patient) => {
     setSelected(patient);
     setSelectedDetails(null);
+    setAbdmLive(null);
     setDetailsError('');
     setIsModalOpen(true);
+    stopAbdmPoll();
 
     const uhid = patient?.uhid;
     if (!uhid) return;
     setDetailsLoading(true);
     api
-      .get(`/receptionist/patients/${uhid}/details`)
-      .then((res) => setSelectedDetails(res?.data || null))
-      .catch(() => setDetailsError('Could not load full patient details'))
+      .get(`/receptionist/patients/${encodeURIComponent(uhid)}/details`)
+      .then(async (res) => {
+        const details = res?.data || null;
+        setSelectedDetails(details);
+        const patientId = details?.id || patient?.patientId;
+        if (!patientId) return;
+        try {
+          const status = await getHipPatientStatus(patientId);
+          setAbdmLive({ patientId, ...status });
+        } catch {
+          setAbdmLive(null);
+        }
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.message || err?.message || 'Could not load full patient details';
+        setDetailsError(msg);
+      })
       .finally(() => setDetailsLoading(false));
+  };
+
+  const startAbdmStatusPoll = (patientId) => {
+    stopAbdmPoll();
+    let ticks = 0;
+    abdmPollRef.current = setInterval(async () => {
+      ticks += 1;
+      if (ticks > 12) {
+        stopAbdmPoll();
+        return;
+      }
+      try {
+        const status = await getHipPatientStatus(patientId);
+        const merged = { patientId, ...status };
+        setAbdmLive(merged);
+        if (shouldStopAbdmPoll(merged)) stopAbdmPoll();
+      } catch {
+        if (ticks > 12) stopAbdmPoll();
+      }
+    }, 8000);
+  };
+
+  const handleRetryContextNotify = async (patientId) => {
+    if (!patientId || abdmRetrying) return;
+    setAbdmRetrying(true);
+    stopAbdmPoll();
+    try {
+      const data = await retryContextNotify({ patientId });
+      setAbdmLive({ patientId, ...data, message: undefined });
+      if (data?.pendingCallback || data?.syncStatus === 'PENDING') startAbdmStatusPoll(patientId);
+    } catch (err) {
+      const data = err?.response?.data || {};
+      setAbdmLive({
+        patientId,
+        ...data,
+        message: abdmLinkUserMessage(data, err),
+      });
+    } finally {
+      setAbdmRetrying(false);
+    }
+  };
+
+  const handleRetryAbdm = async (patientId) => {
+    if (!patientId || abdmRetrying) return;
+    setAbdmRetrying(true);
+    stopAbdmPoll();
+    try {
+      const data = await linkHipPatient({ patientId });
+      const next = { patientId, ...data };
+      setAbdmLive(next);
+      const state = readAbdmLinkState(next);
+      if (state === 'TOKEN_PENDING') startAbdmStatusPoll(patientId);
+    } catch (err) {
+      const data = err?.response?.data || {};
+      setAbdmLive({
+        patientId,
+        ...data,
+        message: abdmLinkUserMessage(data, err),
+      });
+    } finally {
+      setAbdmRetrying(false);
+    }
   };
 
   const handleEditPatient = (patient) => {
@@ -320,7 +357,7 @@ export default function PatientList() {
       state: {
         mode: 'edit',
         patient: {
-          visitId: patient?.id,
+          visitId: patient?.id || undefined,
           uhid: patient?.uhid,
           name: patient?.name,
           phone: patient?.phone,
@@ -328,14 +365,17 @@ export default function PatientList() {
           age: patient?.age,
           gender: patient?.gender,
           address: patient?.address,
-          visitType: patient?.visitType,
-          department: patient?.department,
-          doctor: patient?.doctor,
-          visitDate: patient?.visitDate,
-          token: patient?.token,
-          paymentStatus: patient?.paymentStatus,
-          paymentMode: patient?.paymentMode,
-          registrationFee: patient?.registrationFee,
+          visitType: patient?.visitType || undefined,
+          status: patient?.status || undefined,
+          department: patient?.department || undefined,
+          doctor: patient?.doctor || undefined,
+          visitDate: patient?.visitDate || undefined,
+          token: patient?.token || undefined,
+          paymentStatus: patient?.paymentStatus || undefined,
+          paymentMode: patient?.paymentMode || undefined,
+          registrationFee: patient?.registrationFee || undefined,
+          referBy: patient?.referBy || undefined,
+          sponsor: patient?.sponsor || undefined,
         },
       },
     });
@@ -343,10 +383,18 @@ export default function PatientList() {
 
   const handleAdmitPatient = (patient) => {
     if (!patient?.uhid) return;
-    api
-      .patch(`/receptionist/patients/${patient.uhid}/admit`)
-      .then(() => fetchPatients())
-      .catch(() => {});
+    setIsModalOpen(false);
+    navigate('/dashboard/reception/ipd/admit', {
+      state: {
+        prefillPatient: {
+          uhid: patient.uhid,
+          name: patient.name,
+          mobile: patient.phone,
+          age: patient.age,
+          gender: patient.gender,
+        },
+      },
+    });
   };
 
   const handleBilling = (patient, details) => {
@@ -398,7 +446,7 @@ export default function PatientList() {
         </head>
         <body>
           <div class="card">
-            <p class="title">New H.T. Hospital — Patient Registration Slip</p>
+            <p class="title">MQE HIMS — Patient Registration Slip</p>
             <p class="sub">Please keep this slip for your visit.</p>
             ${patient?.sponsor === 'AYUSHMAN' ? '<p class="sub"><b>Patient Type:</b> Ayushman &nbsp;|&nbsp; <b>Sponsor:</b> Ayushman</p>' : ''}
             <div class="grid">
@@ -453,84 +501,139 @@ export default function PatientList() {
           })}
         </div>
 
-        {/* Search + Filters */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="flex flex-col md:flex-row md:items-center gap-3">
-            <div className="relative w-full md:w-[420px]">
-              <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                value={search}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Search by Name / UHID / Mobile..."
-                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+        {/* Search & Filters */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-extrabold text-gray-500">
+            <MdFilterList className="w-4 h-4" />
+            Search & filters
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="lg:col-span-2 relative">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Search Query</label>
+              <div className="relative">
+                <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={search}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder="Search by Name / UHID / Mobile..."
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                />
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap md:ml-auto md:justify-end">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
-                <MdFilterList className="w-4 h-4" /> Filters
-              </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Visit Type</label>
               <select
                 value={visitType}
                 onChange={(e) => handleFilter('visitType', e.target.value)}
-                className="pl-select"
+                className="pl-select w-full"
               >
                 {VISIT_TYPES.map((v) => (
-                  <option key={v} value={v}>{v}</option>
+                  <option key={v} value={v}>{v === 'All' ? 'All visits' : v}</option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Gender</label>
               <select
                 value={gender}
                 onChange={(e) => handleFilter('gender', e.target.value)}
-                className="pl-select"
+                className="pl-select w-full"
               >
                 {GENDERS.map((g) => (
-                  <option key={g} value={g}>{g}</option>
+                  <option key={g} value={g}>{g === 'All' ? 'All genders' : g}</option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Department</label>
               <select
                 value={department}
                 onChange={(e) => handleFilter('department', e.target.value)}
-                className="pl-select"
+                className="pl-select w-full"
               >
                 {DEPARTMENTS_WITH_ALL.map((d) => (
-                  <option key={d} value={d}>{d}</option>
+                  <option key={d} value={d}>{d === 'All' ? 'All departments' : d}</option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Date Filter</label>
               <select
                 value={dateFilter}
                 onChange={(e) => handleFilter('dateFilter', e.target.value)}
-                className="pl-select"
+                className="pl-select w-full"
               >
                 {DATE_FILTERS.map((d) => (
-                  <option key={d} value={d}>{d}</option>
+                  <option key={d} value={d}>{d === 'All' ? 'All dates' : d === 'Today' ? 'Today' : 'Select Date'}</option>
                 ))}
               </select>
-              {dateFilter === 'Custom' ? (
+            </div>
+          </div>
+
+          {dateFilter === 'Custom' ? (
+            <div className="flex items-center gap-3 pt-2">
+              <div className="w-full max-w-[200px]">
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">From Date</label>
                 <input
                   type="date"
-                  value={customDate}
-                  onChange={(e) => handleFilter('customDate', e.target.value)}
-                  className="pl-select"
+                  value={dateFrom}
+                  onChange={(e) => handleFilter('dateFrom', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                 />
-              ) : null}
+              </div>
+              <span className="self-end mb-2.5 text-gray-400 text-sm">to</span>
+              <div className="w-full max-w-[200px]">
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">To Date</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => handleFilter('dateTo', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100">
+          
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setVisitType('All');
+                  setGender('All');
+                  setDepartment('All');
+                  setDateFilter('All');
+                  setDateFrom('');
+                  setDateTo('');
+                  setPage(1);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold border border-gray-200 text-gray-700 hover:bg-gray-50 transition"
+              >
+                Clear filters
+              </button>
 
               <button
                 type="button"
                 onClick={handleDownloadList}
                 disabled={downloading || loading}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-800 bg-slate-100 border border-slate-200 hover:bg-slate-200 transition disabled:opacity-60"
-                title="Current filters ke hisaab se CSV download"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold border border-gray-200 text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
               >
                 <MdDownload className="w-4 h-4" />
-                {downloading ? 'Downloading…' : 'Download'}
+                {downloading ? 'Downloading…' : 'Download CSV'}
               </button>
 
               <button
                 type="button"
                 onClick={() => navigate('/dashboard/reception/patients/register')}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow hover:shadow-md transition hover:-translate-y-0.5"
-                style={{ background: 'linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 60%, #1d4ed8 100%)' }}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white shadow hover:shadow-md transition hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(135deg, #065f46, #059669)' }}
               >
                 <MdAdd className="w-4 h-4" /> Register Patient
               </button>
@@ -544,7 +647,7 @@ export default function PatientList() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ background: '#f8faff' }}>
-                  {['Reg No', 'Patient Name', 'Age / Gender', 'Mobile', 'Visit Type', 'Doctor', 'Status', 'Date', 'Actions'].map((h) => (
+                  {['Reg No', 'Patient Name', 'Age / Gender', 'Mobile', 'Source', 'Visit Type', 'Doctor', 'Status', 'ABDM', 'Date', 'Actions'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -578,6 +681,13 @@ export default function PatientList() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
+                      {p.registrationSource === 'SELF' ? (
+                        <span className="text-xs font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">Online</span>
+                      ) : (
+                        <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Offline</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${p.visitType === 'IPD' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
                         {p.visitType || '—'}
                       </span>
@@ -590,19 +700,48 @@ export default function PatientList() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
+                      {(() => {
+                        const abdmState = readAbdmLinkState(p);
+                        const tone = abdmState === 'CARE_LINKED'
+                          ? 'text-green-700 bg-green-50'
+                          : abdmState === 'TOKEN_PENDING' || abdmState === 'CARE_LINKING' || abdmState === 'TOKEN_GENERATED'
+                            ? 'text-amber-700 bg-amber-50'
+                            : abdmState === 'UNAVAILABLE'
+                              ? 'text-orange-700 bg-orange-50'
+                              : abdmState === 'LINK_FAILED'
+                                ? 'text-red-700 bg-red-50'
+                                : 'text-gray-600 bg-gray-100';
+                        return (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${tone}`}>
+                            {ABDM_LINK_LABEL[abdmState]}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-4 py-3">
                       <span className="flex items-center gap-1 text-xs text-gray-500">
                         <MdCalendarToday className="w-3 h-3" />{formatDate(p.visitDate)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => handleViewPatient(p)}
-                        className="text-xs font-extrabold text-blue-700 hover:text-blue-900 underline underline-offset-4"
-                        title="View"
-                      >
-                        View
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleViewPatient(p)}
+                          className="text-xs font-extrabold text-blue-700 hover:text-blue-900 underline underline-offset-4"
+                          title="View"
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEditPatient(p)}
+                          className="text-xs font-extrabold text-amber-600 hover:text-amber-800 underline underline-offset-4"
+                          title="Edit"
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -694,7 +833,10 @@ export default function PatientList() {
               })()}
               <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  stopAbdmPoll();
+                  setIsModalOpen(false);
+                }}
                 className="pl-modalClose"
                 title="Close"
               >
@@ -718,6 +860,7 @@ export default function PatientList() {
                         <div><p className="k">Age / Gender</p><p className="v">{full.age || '—'} / {full.gender || '—'}</p></div>
                         <div><p className="k">DOB</p><p className="v">{full.dob ? formatDate(full.dob) : '—'}</p></div>
                         <div><p className="k">Aadhaar / ID</p><p className="v">{full.aadhaarId || '—'}</p></div>
+                        <div><p className="k">Registration</p><p className="v">{full.registrationSource === 'SELF' ? 'Online (Self)' : 'Reception'}</p></div>
                         <div className="colspan2"><p className="k">Address</p><p className="v">{full.address || '—'}</p></div>
                       </div>
                     </div>
@@ -737,6 +880,51 @@ export default function PatientList() {
                         <div><p className="k">Relation</p><p className="v">{full.emergencyRelation || '—'}</p></div>
                         <div className="colspan2"><p className="k">Phone</p><p className="v">{full.emergencyPhone || '—'}</p></div>
                       </div>
+                    </div>
+
+                    <div className="pl-modalCard pl-modalCardWide">
+                      {(() => {
+                        const abdm = { ...full, ...(abdmLive || {}) };
+                        const abdmState = readAbdmLinkState(abdm);
+                        const patientId = abdm.id || abdm.patientId || full.id || full.patientId;
+                        const message = abdmLive?.message || abdmLinkUserMessage(abdm);
+                        const lastAttempt = abdm.linkedAt || abdm.syncTime || null;
+                        return (
+                          <>
+                            <p className="pl-modalCardTitle">ABDM Integration</p>
+                            <div className="pl-kv">
+                              <div><p className="k">ABDM Link Status</p><p className="v">{ABDM_LINK_LABEL[abdmState] || 'ABDM Not Linked'}</p></div>
+                              <div><p className="k">Link Token</p><p className="v">{abdmLinkTokenLabel(abdmState)}</p></div>
+                              <div><p className="k">Care Context</p><p className="v">{abdmCareContextLabel(abdmState, abdm)}</p></div>
+                              <div><p className="k">Last Attempt</p><p className="v">{lastAttempt ? formatDate(lastAttempt) : '—'}</p></div>
+                              <div className="colspan2"><p className="k">Message</p><p className="v">{message || '—'}</p></div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-3">
+                              ABDM Linking → Link Token → Care Context → Context Notify (Coming Next)
+                            </p>
+                            {shouldRetryContextNotify(abdm) && patientId ? (
+                              <button
+                                type="button"
+                                className="pl-actionBtn mt-3"
+                                disabled={abdmRetrying}
+                                onClick={() => handleRetryContextNotify(patientId)}
+                              >
+                                {abdmRetrying ? 'Retrying…' : 'Retry Context Notify'}
+                              </button>
+                            ) : abdmState !== 'CARE_LINKED' && patientId ? (
+                              <button
+                                type="button"
+                                className="pl-actionBtn mt-3"
+                                disabled={abdmRetrying}
+                                onClick={() => handleRetryAbdm(patientId)}
+                              >
+                                {abdmRetrying ? 'Retrying…' : 'Retry ABDM Linking'}
+                              </button>
+                            ) : null}
+                            {patientId ? <AbdmPatientRecordSync patientId={patientId} /> : null}
+                          </>
+                        );
+                      })()}
                     </div>
 
                     <div className="pl-modalCard pl-modalCardWide">
@@ -775,14 +963,28 @@ export default function PatientList() {
                 >
                   <MdReceiptLong className="w-4 h-4" /> Billing
                 </button>
-                <button
-                  type="button"
-                  className="pl-actionBtn"
-                  onClick={() => handleAdmitPatient(selected)}
-                  disabled={selected.visitType === 'IPD'}
-                >
-                  <MdBed className="w-4 h-4" /> Admit
-                </button>
+                {(() => {
+                  const disp = selectedDetails?.consultation?.disposition;
+                  const canAdmit = !disp || disp === 'REFER_ADMIT';
+                  if (!canAdmit) return null;
+                  return (
+                    <button
+                      type="button"
+                      className="pl-actionBtn"
+                      onClick={() => handleAdmitPatient(selected)}
+                      disabled={Boolean(
+                        selectedDetails?.uhid === selected?.uhid && selectedDetails?.hasActiveIpdAdmission,
+                      )}
+                      title={
+                        selectedDetails?.uhid === selected?.uhid && selectedDetails?.hasActiveIpdAdmission
+                          ? 'Patient already has an active IPD admission'
+                          : 'Open full IPD admission form'
+                      }
+                    >
+                      <MdBed className="w-4 h-4" /> Admit
+                    </button>
+                  );
+                })()}
                 <button type="button" className="pl-actionBtn" onClick={() => handlePrintSlip(selected)}>
                   <MdPrint className="w-4 h-4" /> Print Slip
                 </button>

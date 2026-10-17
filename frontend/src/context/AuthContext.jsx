@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../utils/api';
+import { getValidStaffSession, resetStaffSessionFlags } from '../utils/authSession';
 
 const AuthContext = createContext(null);
 
@@ -8,17 +9,15 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    const savedUser = localStorage.getItem('user');
-    if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    const session = getValidStaffSession();
+    if (session) setUser(session.user);
     setLoading(false);
   }, []);
 
   const login = async (email, password, role) => {
     const res = await api.post('/auth/login', { email, password, role });
     const { accessToken, user } = res.data;
+    resetStaffSessionFlags();
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('user', JSON.stringify(user));
     setUser(user);
@@ -26,7 +25,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    localStorage.clear();
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('user');
     setUser(null);
   };
 

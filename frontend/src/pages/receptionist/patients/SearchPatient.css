@@ -14,7 +14,7 @@
 .sp-suggestHeader {
   padding: 10px 14px;
   border-bottom: 1px solid rgba(15, 45, 94, 0.08);
-  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.03));
+  background: #f8faff;
 }
 
 .sp-suggestLoading {
@@ -43,14 +43,14 @@
   padding: 8px 10px;
   border-radius: 999px;
   border: 1px solid rgba(15, 45, 94, 0.12);
-  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.04));
+  background: #f8faff;
   color: #0f2d5e;
   font-size: 12px;
   font-weight: 800;
 }
 .sp-pillDanger {
   border-color: rgba(220, 38, 38, 0.22);
-  background: linear-gradient(135deg, rgba(220, 38, 38, 0.10), rgba(220, 38, 38, 0.04));
+  background: rgba(220, 38, 38, 0.06);
   color: #991b1b;
 }
 
@@ -99,7 +99,7 @@
   padding: 10px 12px;
   border-radius: 16px;
   border: 1px solid rgba(15, 45, 94, 0.10);
-  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.03));
+  background: #f8faff;
   color: #0f2d5e;
 }
 .sp-alertDanger {
@@ -155,4 +155,7 @@
     transform: rotate(360deg);
   }
 }
+
+
+
 

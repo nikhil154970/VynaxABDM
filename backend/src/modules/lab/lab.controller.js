@@ -8,6 +8,7 @@ const {
   zeroLabOrderLinesFromItems,
 } = require('../../utils/ayushmanBilling');
 const { $Enums } = require('@prisma/client');
+const { emitAbdmClinicalEvent, EVENT } = require('../abdm/lib/abdmHealthRecord');
 
 /** Must match generated Prisma enum (same package as PrismaClient). */
 const TEST_ADVICE_PENDING = $Enums.TestAdviceStatus.PENDING_BILLING;
@@ -45,6 +46,55 @@ async function assertNurseLabPatientAccess(req, patientId) {
 function normalizeString(v) {
   const s = typeof v === 'string' ? v : v == null ? '' : String(v);
   return s.trim();
+}
+
+/** Link panel parameter rows (remarks = panel name) to the billed order line for category on reports. */
+function findOrderItemForResult(items, r) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return null;
+  const testName = normalizeString(r?.testName);
+  const panel = normalizeString(r?.remarks) || normalizeString(r?.group);
+  const orderItemId = normalizeString(r?.orderItemId);
+  if (orderItemId) {
+    const byId = list.find((it) => it.id === orderItemId);
+    if (byId) return byId;
+  }
+  if (testName) {
+    const exact = list.find((it) => it.testName === testName);
+    if (exact) return exact;
+  }
+  if (panel) {
+    const byPanel = list.find((it) => it.testName === panel);
+    if (byPanel) return byPanel;
+    const panelNorm = panel.toLowerCase();
+    return (
+      list.find((it) => {
+        const n = String(it.testName || '').toLowerCase();
+        if (!n) return false;
+        return n === panelNorm || n.includes(panelNorm) || panelNorm.includes(n);
+      }) || null
+    );
+  }
+  return null;
+}
+
+function resolveResultCategory(result, items) {
+  const item = findOrderItemForResult(items, result);
+  const fromItem = normalizeString(item?.category);
+  if (fromItem && fromItem.toLowerCase() !== 'general') return fromItem;
+
+  const panel = normalizeString(result?.remarks);
+  if (panel) {
+    const panelNorm = panel.toLowerCase();
+    const byPanel = (Array.isArray(items) ? items : []).find((it) => {
+      const n = String(it.testName || '').toLowerCase();
+      if (!n) return false;
+      return n === panelNorm || n.includes(panelNorm) || panelNorm.includes(n);
+    });
+    const cat = normalizeString(byPanel?.category);
+    if (cat && cat.toLowerCase() !== 'general') return cat;
+  }
+  return null;
 }
 
 function slugCode(input) {
@@ -475,11 +525,10 @@ async function listTestsSimple(req, res) {
 
 async function createManagedLabTest(req, res) {
   const name = normalizeString(req.body?.name);
-  const category = normalizeManagedCategory(req.body?.category);
+  const category = normalizeManagedCategory(req.body?.category) || '';
   const price = Number(req.body?.price);
   const isActive = req.body?.isActive !== false && req.body?.isActive !== 'false';
   if (!name) return res.status(400).json({ message: 'Name is required' });
-  if (!category) return res.status(400).json({ message: 'Valid category is required' });
   if (!Number.isFinite(price) || price < 0) return res.status(400).json({ message: 'Valid price is required' });
   const row = await prisma.labTest.create({
     data: { name, category, price, isActive },
@@ -499,9 +548,7 @@ async function updateManagedLabTest(req, res) {
     patch.name = n;
   }
   if (req.body?.category !== undefined) {
-    const c = normalizeManagedCategory(req.body.category);
-    if (!c) return res.status(400).json({ message: 'Valid category is required' });
-    patch.category = c;
+    patch.category = normalizeManagedCategory(req.body.category) || '';
   }
   if (req.body?.price !== undefined) {
     const p = Number(req.body.price);
@@ -913,17 +960,18 @@ async function submitLabResults(req, res) {
     const saved = await prisma.$transaction(async (tx) => {
       const order = await tx.labOrder.findUnique({ where: { id }, include: { items: true } });
       if (!order) throw new Error('ORDER_NOT_FOUND');
-      if (order.status !== LS.IN_PROGRESS) throw new Error('ORDER_NOT_READY');
+      if (order.status !== LS.IN_PROGRESS && order.status !== LS.COMPLETED) throw new Error('ORDER_NOT_READY');
 
       // Replace existing results for simplicity (idempotent submit)
       await tx.labResult.deleteMany({ where: { labOrderId: order.id } });
 
-      const itemByName = new Map((order.items || []).map((it) => [it.testName, it]));
+      const filledResults = results.filter((r) => normalizeString(r?.value));
+      if (!filledResults.length) throw new Error('NO_RESULTS');
 
       await tx.labResult.createMany({
-        data: results.map((r) => {
+        data: filledResults.map((r) => {
           const testName = normalizeString(r.testName);
-          const it = itemByName.get(testName);
+          const it = findOrderItemForResult(order.items, r);
           return {
             labOrderId: order.id,
             orderItemId: it?.id || null,
@@ -931,6 +979,11 @@ async function submitLabResults(req, res) {
             value: normalizeString(r.value),
             unit: normalizeString(r.unit) || it?.unit || null,
             referenceRange: normalizeString(r.referenceRange) || it?.referenceRange || null,
+            category:
+              normalizeString(r.category) ||
+              normalizeString(it?.category) ||
+              resolveResultCategory({ remarks: r.remarks, testName }, order.items) ||
+              null,
             remarks: normalizeString(r.remarks) || null,
             attachmentUrl: normalizeString(r.fileUrl || r.attachmentUrl) || null,
             enteredByUserId: userId,
@@ -945,7 +998,7 @@ async function submitLabResults(req, res) {
           reportStatus,
           notes: overallRemarks || diagnosis || verifiedBy || approvedBy ? [overallRemarks, diagnosis, verifiedBy, approvedBy].filter(Boolean).join(' | ') : order.notes,
         },
-        select: { id: true, orderNumber: true, status: true, reportStatus: true },
+        select: { id: true, orderNumber: true, status: true, reportStatus: true, patientId: true },
       });
       return updated;
     });
@@ -993,6 +1046,19 @@ async function submitLabResults(req, res) {
       console.error('Lab report completion notifications', notifyErr);
     }
 
+    const reportReady = String(saved.reportStatus || '').toUpperCase();
+    if (saved.patientId && (reportReady === 'COMPLETED' || reportReady === 'VERIFIED')) {
+      setImmediate(() => {
+        emitAbdmClinicalEvent({
+          type: EVENT.LAB_REPORT,
+          sourceId: saved.id,
+          patientId: saved.patientId,
+        }).catch((err) => {
+          console.error('[abdm-hr] LAB emit failed', saved.id, err?.message);
+        });
+      });
+    }
+
     return res.json({ ok: true, order: saved });
   } catch (e) {
     const msg = String(e?.message || '');
@@ -1001,6 +1067,9 @@ async function submitLabResults(req, res) {
       return res.status(409).json({
         message: 'Use “Start test” after sample collection, then enter results (status must be in progress).',
       });
+    }
+    if (msg === 'NO_RESULTS') {
+      return res.status(400).json({ message: 'At least one result value is required' });
     }
     // eslint-disable-next-line no-console
     console.error(e);
@@ -1091,22 +1160,19 @@ async function getLabReportByRequestId(req, res) {
       unit: it.unit,
       referenceRange: it.referenceRange,
     })),
-    results: (order.results || []).map((r) => {
-      const item =
-        (order.items || []).find((it) => it.id === r.orderItemId) ||
-        (order.items || []).find((it) => it.testName === r.testName);
-      return {
-        testName: r.testName,
-        value: r.value,
-        unit: r.unit,
-        referenceRange: r.referenceRange,
-        remarks: r.remarks,
-        fileUrl: r.attachmentUrl,
-        createdAt: r.createdAt,
-        category: item?.category || null,
-        orderItemId: r.orderItemId,
-      };
-    }),
+    results: (order.results || [])
+      .filter((r) => normalizeString(r?.value))
+      .map((r) => ({
+          testName: r.testName,
+          value: r.value,
+          unit: r.unit,
+          referenceRange: r.referenceRange,
+          remarks: r.remarks,
+          fileUrl: r.attachmentUrl,
+          createdAt: r.createdAt,
+          category: normalizeString(r.category) || resolveResultCategory(r, order.items) || null,
+          orderItemId: r.orderItemId,
+        })),
     createdAt: order.createdAt,
   });
 }
@@ -1156,8 +1222,14 @@ async function listPatientLabReports(req, res) {
 // --- OPD test advice → bill + lab order (receptionist) ---
 async function listPendingTestAdvice(req, res) {
   try {
+    const uhidFilter = normalizeString(req.query.uhid);
     const rows = await prisma.testAdvice.findMany({
-      where: { status: TEST_ADVICE_PENDING },
+      where: {
+        status: TEST_ADVICE_PENDING,
+        ...(uhidFilter
+          ? { patient: { uhid: { equals: uhidFilter, mode: 'insensitive' } } }
+          : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
       select: {
@@ -1187,7 +1259,9 @@ async function listPendingTestAdvice(req, res) {
       const sponsor = a.patient?.visits?.[0]?.sponsor || '';
       const ayushman = isAyushmanSponsor(sponsor);
       const tests = (a.items || []).map((it) => ({
+        testId: it.test?.id ?? null,
         name: it.test?.name || '—',
+        category: it.test?.category || '',
         price: Math.max(0, Math.round(Number(it.test?.price) || 0)),
       }));
       const totalAmount = tests.reduce((s, t) => s + t.price, 0);
@@ -1395,7 +1469,7 @@ async function resolveLabOrderDoctorId(tx, { doctorId, patientId }) {
   if (appt?.doctorId) return appt.doctorId;
   const fallback = await tx.doctor.findFirst({
     where: { user: { isActive: true } },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { user: { createdAt: 'asc' } },
     select: { id: true },
   });
   if (!fallback?.id) throw new Error('NO_DOCTOR');
@@ -1467,6 +1541,7 @@ async function closeMatchingPendingAdvice(tx, patientId, labOrderId, billedTestN
     where: { patientId, status: TEST_ADVICE_PENDING },
     include: { items: { include: { test: { select: { name: true } } } } },
   });
+  let linked = false;
   for (const a of pending) {
     const adviceNames = (a.items || []).map((it) => it.test?.name).filter(Boolean);
     if (!adviceNames.length) continue;
@@ -1474,8 +1549,9 @@ async function closeMatchingPendingAdvice(tx, patientId, labOrderId, billedTestN
     if (allInBill) {
       await tx.testAdvice.update({
         where: { id: a.id },
-        data: { status: TEST_ADVICE_CONVERTED, labOrderId },
+        data: { status: TEST_ADVICE_CONVERTED, ...(linked ? {} : { labOrderId }) },
       });
+      linked = true;
     }
   }
 }
@@ -1666,6 +1742,9 @@ async function createReceptionistLabBill(req, res) {
     if (msg === 'INVALID_TEST_PRICE') return res.status(400).json({ message: 'Test amount invalid' });
     if (msg === 'NO_CHARGE_LINES') return res.status(400).json({ message: 'Could not build bill lines' });
     if (msg === 'NO_DOCTOR') return res.status(400).json({ message: 'No active doctor available — add a doctor first' });
+    if (msg === 'BILL_NUMBER_EXHAUSTED') return res.status(500).json({ message: 'Bill number limit reached — try again tomorrow' });
+    if (msg === 'LAB_ORDER_NUMBER_EXHAUSTED') return res.status(500).json({ message: 'Order number limit reached — try again tomorrow' });
+    if (msg === 'BILL_DATE_INVALID' || msg === 'LAB_ORDER_DATE_INVALID') return res.status(500).json({ message: 'Server date error — contact admin' });
     // eslint-disable-next-line no-console
     console.error(e);
     return res.status(500).json({ message: 'Could not create lab bill' });
@@ -1748,6 +1827,207 @@ async function listReceptionistLabBills(req, res) {
   return res.json({ items });
 }
 
+const CUSTOM_PARAMS_PATH = path.join(__dirname, 'customParams.json');
+
+function readCustomParams() {
+  try {
+    if (!fs.existsSync(CUSTOM_PARAMS_PATH)) return {};
+    return JSON.parse(fs.readFileSync(CUSTOM_PARAMS_PATH, 'utf8'));
+  } catch { return {}; }
+}
+
+function writeCustomParams(data) {
+  fs.writeFileSync(CUSTOM_PARAMS_PATH, JSON.stringify(data, null, 2), 'utf8');
+}
+
+const listCustomParams = async (req, res) => {
+  try {
+    const { department, testName } = req.query;
+    const all = readCustomParams();
+    if (department && testName) {
+      return res.json({ items: all[`${department}::${testName}`] || [] });
+    }
+    return res.json({ items: [] });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+const createCustomParam = async (req, res) => {
+  try {
+    const { department, testName, parameter, unit, referenceRange } = req.body;
+    if (!department || !testName || !parameter) return res.status(400).json({ message: 'department, testName, parameter required' });
+    const all = readCustomParams();
+    const key = `${department}::${testName}`;
+    if (!all[key]) all[key] = [];
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    all[key].push({ id, department, testName, parameter, unit: unit || '', referenceRange: referenceRange || '', createdAt: new Date().toISOString() });
+    writeCustomParams(all);
+    res.json({ message: 'Parameter added', id });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+const deleteCustomParam = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const all = readCustomParams();
+    for (const key of Object.keys(all)) {
+      const before = all[key].length;
+      all[key] = all[key].filter((p) => p.id !== id);
+      if (all[key].length === 0 && before > 0) delete all[key];
+    }
+    writeCustomParams(all);
+    res.json({ message: 'Parameter deleted' });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+/**
+ * POST /lab/orders/:id/repeat
+ * Create a fresh IN_PROGRESS lab order (a new test session) for the same patient as the
+ * source order, so a repeat/new test does NOT overwrite the previous completed report.
+ * The new order carries no results yet — the technician submits them via the results endpoint.
+ */
+async function createRepeatLabOrder(req, res) {
+  if (!LS.IN_PROGRESS) {
+    return res.status(503).json({
+      message:
+        'Lab workflow enum is outdated (missing IN_PROGRESS). Run: npx prisma migrate deploy && npx prisma generate',
+    });
+  }
+  const sourceId = normalizeString(req.params.id);
+  if (!sourceId) return res.status(400).json({ message: 'Source order id is required' });
+
+  try {
+    const order = await prisma.$transaction(async (tx) => {
+      const source = await tx.labOrder.findUnique({
+        where: { id: sourceId },
+        select: { id: true, patientId: true, doctorId: true },
+      });
+      if (!source) throw new Error('ORDER_NOT_FOUND');
+
+      const orderNumber = await allocateNextLabOrderNumber(tx, new Date());
+      return tx.labOrder.create({
+        data: {
+          orderNumber,
+          patientId: source.patientId,
+          doctorId: source.doctorId,
+          status: LS.IN_PROGRESS,
+          reportStatus: 'PENDING',
+          notes: null,
+        },
+        select: { id: true, orderNumber: true, status: true, patientId: true },
+      });
+    });
+
+    return res.status(201).json({ ok: true, order });
+  } catch (e) {
+    const msg = String(e?.message || '');
+    if (msg === 'ORDER_NOT_FOUND') return res.status(404).json({ message: 'Source lab order not found' });
+    if (msg === 'LAB_ORDER_NUMBER_EXHAUSTED') {
+      return res.status(500).json({ message: 'Order number limit reached — try again tomorrow' });
+    }
+    // eslint-disable-next-line no-console
+    console.error('createRepeatLabOrder', e);
+    return res.status(500).json({ message: 'Could not start a new test for this patient' });
+  }
+}
+
+// ─── Nurse IPD Lab Advice ───
+
+async function listNurseLabAdvice(req, res) {
+  try {
+    const admissionId = normalizeString(req.params.admissionId);
+    if (!admissionId) return res.status(400).json({ message: 'admissionId is required' });
+
+    const admission = await prisma.admission.findUnique({
+      where: { id: admissionId },
+      select: { id: true, patientId: true, doctorId: true },
+    });
+    if (!admission) return res.status(404).json({ message: 'Admission not found' });
+
+    const gate = await assertNurseLabPatientAccess(req, admission.patientId);
+    if (!gate.ok) return res.status(gate.status).json({ message: gate.message });
+
+    const rows = await prisma.testAdvice.findMany({
+      where: { admissionId, source: 'NURSE_IPD' },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        status: true,
+        clinicalNote: true,
+        createdAt: true,
+        items: {
+          select: {
+            test: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const out = rows.map((a) => ({
+      id: a.id,
+      status: a.status,
+      clinicalNote: a.clinicalNote || '',
+      tests: (a.items || []).map((it) => ({ name: it.test?.name || '—' })),
+      createdAt: a.createdAt,
+    }));
+
+    return res.json(out);
+  } catch (e) {
+    console.error('listNurseLabAdvice', e);
+    return res.status(500).json({ message: 'Could not load nurse lab advice' });
+  }
+}
+
+async function createNurseLabAdvice(req, res) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Access token required' });
+
+    const admissionId = normalizeString(req.body?.admissionId);
+    const testIds = Array.isArray(req.body?.testIds) ? req.body.testIds.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0) : [];
+    const clinicalNote = String(req.body?.clinicalNote || '').trim();
+
+    if (!admissionId) return res.status(400).json({ message: 'admissionId is required' });
+    if (!testIds.length) return res.status(400).json({ message: 'Select at least one test' });
+
+    const admission = await prisma.admission.findUnique({
+      where: { id: admissionId },
+      select: { id: true, patientId: true, doctorId: true },
+    });
+    if (!admission) return res.status(404).json({ message: 'Admission not found' });
+
+    const gate = await assertNurseLabPatientAccess(req, admission.patientId);
+    if (!gate.ok) return res.status(gate.status).json({ message: gate.message });
+
+    const advice = await prisma.testAdvice.create({
+      data: {
+        patientId: admission.patientId,
+        doctorId: admission.doctorId,
+        admissionId,
+        source: 'NURSE_IPD',
+        status: 'PENDING_BILLING',
+        clinicalNote: clinicalNote || undefined,
+        requestedByUserId: userId,
+        items: {
+          create: testIds.map((id) => ({ testId: id })),
+        },
+      },
+      select: { id: true, status: true, createdAt: true },
+    });
+
+    return res.status(201).json({ advice });
+  } catch (e) {
+    console.error('createNurseLabAdvice', e);
+    return res.status(500).json({ message: 'Could not create nurse lab advice' });
+  }
+}
+
 module.exports = {
   listCatalog,
   listTestsSimple,
@@ -1768,6 +2048,7 @@ module.exports = {
   listLabRequests,
   getLabOrderDetail,
   submitLabResults,
+  createRepeatLabOrder,
   collectLabRequest,
   startLabRequest,
   getLabReportByRequestId,
@@ -1775,5 +2056,10 @@ module.exports = {
   listPatientLabReports,
   createReceptionistLabBill,
   listReceptionistLabBills,
+  listCustomParams,
+  createCustomParam,
+  deleteCustomParam,
+  listNurseLabAdvice,
+  createNurseLabAdvice,
 };
 

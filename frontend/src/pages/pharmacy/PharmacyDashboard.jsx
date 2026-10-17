@@ -5,6 +5,7 @@ import {
   Package,
   ShoppingBag,
   Truck,
+  Pill,
 } from 'lucide-react';
 import {
   Area,
@@ -118,8 +119,8 @@ export default function PharmacyDashboard() {
           label="Today Sales"
           value={formatMoney(kpis.todaySales)}
           sub={kpis.salesChangeLabel || '—'}
-          color="#2563eb"
-          bg="#dbeafe"
+          color="#0077B6"
+          bg="#e0f2fe"
           to="/dashboard/pharmacy/billing"
           trendData={salesChart}
           loading={loading}
@@ -129,8 +130,8 @@ export default function PharmacyDashboard() {
           label="Pending Prescriptions"
           value={String(kpis.pendingPrescriptions ?? '—')}
           sub="View prescription queue"
-          color="#7c3aed"
-          bg="#ede9fe"
+          color="#001B48"
+          bg="#e8f1f5"
           to="/dashboard/pharmacy/billing/queue"
           trendData={salesChart}
           loading={loading}
@@ -140,8 +141,8 @@ export default function PharmacyDashboard() {
           label="Low Stock Medicines"
           value={String(kpis.lowStockCount ?? '—')}
           sub="View inventory"
-          color="#f97316"
-          bg="#ffedd5"
+          color="#0077B6"
+          bg="#e0f2fe"
           to="/dashboard/pharmacy/inventory"
           trendData={salesChart}
           loading={loading}
@@ -155,9 +156,20 @@ export default function PharmacyDashboard() {
               ? `${kpis.suppliersNeedFollowUp} need follow-up`
               : 'All suppliers OK'
           }
-          color="#ef4444"
-          bg="#fee2e2"
+          color="#001B48"
+          bg="#e8f1f5"
           to="/dashboard/pharmacy/suppliers"
+          trendData={salesChart}
+          loading={loading}
+        />
+        <KpiCard
+          icon={Pill}
+          label="Pending OT Issues"
+          value={String(kpis.pendingOtIssuesCount ?? '—')}
+          sub="Fulfill OT requests"
+          color="#059669"
+          bg="#ecfdf5"
+          to="/dashboard/pharmacy/ot-issue"
           trendData={salesChart}
           loading={loading}
         />
@@ -174,8 +186,8 @@ export default function PharmacyDashboard() {
                 <AreaChart data={salesChart} margin={{ top: 6, right: 16, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="pharmacySalesFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.22} />
-                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="#0077B6" stopOpacity={0.22} />
+                      <stop offset="95%" stopColor="#0077B6" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 400 }} />
@@ -187,7 +199,7 @@ export default function PharmacyDashboard() {
                     tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 400 }}
                   />
                   <Tooltip formatter={(v) => [`₹${Number(v).toLocaleString('en-IN')}`, 'Sales']} />
-                  <Area type="monotone" dataKey="amount" stroke="#2563eb" fill="url(#pharmacySalesFill)" strokeWidth={3} dot={{ r: 4, fill: '#2563eb' }} />
+                  <Area type="monotone" dataKey="amount" stroke="#0077B6" fill="url(#pharmacySalesFill)" strokeWidth={3} dot={{ r: 4, fill: '#0077B6' }} />
                 </AreaChart>
               </ResponsiveContainer>
             )}

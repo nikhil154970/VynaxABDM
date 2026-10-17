@@ -45,6 +45,8 @@ router.get(
     query('gender').optional().isString(),
     query('department').optional().isString(),
     query('date').optional().isString(),
+    query('dateFrom').optional().isString(),
+    query('dateTo').optional().isString(),
     query('export').optional().isIn(['1']),
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().custom((value, { req }) => {

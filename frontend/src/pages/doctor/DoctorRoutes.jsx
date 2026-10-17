@@ -14,6 +14,8 @@ import SearchPatient from './history/SearchPatient';
 import FullHistory from './history/FullHistory';
 import Notifications from './Notifications';
 import Profile from './Profile';
+import OTSchedule from './OTSchedule';
+import AllOTRecovery from './AllOTRecovery';
 
 function LogoutRoute() {
   const { logout } = useAuth();
@@ -60,8 +62,14 @@ export default function DoctorRoutes() {
       </Route>
 
       <Route path="notifications">
+        <Route index element={<Navigate to="alerts" replace />} />
         <Route path="alerts" element={<Notifications tab="alerts" />} />
         <Route path="updates" element={<Notifications tab="updates" />} />
+      </Route>
+
+      <Route path="ot">
+        <Route path="schedule" element={<OTSchedule />} />
+        <Route path="recovery" element={<AllOTRecovery />} />
       </Route>
 
       <Route path="profile" element={<Profile />} />

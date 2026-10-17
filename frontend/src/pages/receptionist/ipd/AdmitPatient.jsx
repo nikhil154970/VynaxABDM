@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   MdArrowBack,
@@ -37,7 +37,7 @@ function toISODate(d) {
 }
 
 function formatShortDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return '�';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString('en-IN', {
@@ -84,7 +84,7 @@ const DOCTORS_BY_DEPT = {
 
 const INITIAL_WARDS = [];
 
-/** Room charge hint by admission type (mock — backend will return real tariffs) */
+/** Room charge hint by admission type (mock � backend will return real tariffs) */
 const ROOM_CHARGE_BY_TYPE = {
   'General Ward': 1200,
   ICU: 8500,
@@ -136,19 +136,19 @@ function AdmitWorkflowStrip({ patientSelected }) {
       <p className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700/80 mb-1">Standard workflow</p>
       <p className="text-xs sm:text-sm text-gray-700 font-medium leading-snug">
         <span className="text-gray-900 font-extrabold">Patient lookup</span>
-        <span className="mx-1.5 text-gray-300">→</span>
+        <span className="mx-1.5 text-gray-300">?</span>
         <span className="text-gray-800">Admission</span>
-        <span className="mx-1.5 text-gray-300">→</span>
+        <span className="mx-1.5 text-gray-300">?</span>
         <span className="text-gray-800">Bed</span>
-        <span className="mx-1.5 text-gray-300">→</span>
+        <span className="mx-1.5 text-gray-300">?</span>
         <span className="text-gray-800">Clinical</span>
-        <span className="mx-1.5 text-gray-300">→</span>
+        <span className="mx-1.5 text-gray-300">?</span>
         <span className="text-gray-800">Billing</span>
       </p>
       <p className={`text-[11px] mt-2 font-semibold ${patientSelected ? 'text-emerald-700' : 'text-gray-500'}`}>
         {patientSelected
-          ? 'Patient selected — complete the sections below.'
-          : 'Search any patient, or pick one from “Doctor referred for IPD” below.'}
+          ? 'Patient selected � complete the sections below.'
+          : 'Search any registered patient to start Direct IPD admission.'}
       </p>
     </div>
   );
@@ -166,6 +166,9 @@ function enrichPatientRow(p) {
     gender: p?.gender || '',
     sponsor,
     isAyushman,
+    emergencyName: p?.emergencyName || '',
+    emergencyPhone: p?.emergencyPhone || '',
+    hasActiveIpdAdmission: p?.hasActiveIpdAdmission === true,
   };
 }
 
@@ -180,6 +183,9 @@ async function resolvePatientWithSponsor(p) {
       ...row,
       sponsor,
       isAyushman: d.isAyushman === true || isAyushmanSponsor(sponsor),
+      emergencyName: d.emergencyName || row.emergencyName || '',
+      emergencyPhone: d.emergencyPhone || row.emergencyPhone || '',
+      hasActiveIpdAdmission: d.hasActiveIpdAdmission === true,
     });
   } catch {
     return row;
@@ -209,13 +215,6 @@ const apiClient = {
       .map((d) => ({ id: d.id, name: d.name || d.user?.name || '', specialization: d.specialization || '' }))
       .filter((d) => d.id && d.name);
   },
-  async fetchNurses() {
-    const res = await api.get('/receptionist/ipd/nurses');
-    const items = Array.isArray(res?.data?.items) ? res.data.items : [];
-    return items
-      .map((n) => ({ id: n.id, name: n.name || n.email || 'Nurse' }))
-      .filter((n) => n.id);
-  },
   async fetchWards() {
     const res = await api.get('/receptionist/ipd/wards');
     const items = Array.isArray(res?.data?.items) ? res.data.items : [];
@@ -241,13 +240,23 @@ const apiClient = {
   },
   async createAdmission(payload) {
     const res = await api.post('/receptionist/ipd/admissions', payload);
-    return res?.data?.admission;
+    return res?.data;
+  },
+  async fetchCanAssignNurse() {
+    const res = await api.get('/receptionist/ipd/can-assign-nurse');
+    return res?.data || { canAssignNurse: false, shift: null };
+  },
+  async fetchAvailableNurses() {
+    const res = await api.get('/receptionist/ipd/available-nurses');
+    return Array.isArray(res?.data?.nurses) ? res.data.nurses : [];
   },
   async fetchPendingReferrals() {
     const res = await api.get('/receptionist/ipd/referrals/pending-admit');
     return Array.isArray(res?.data?.items) ? res.data.items : [];
   },
-  async markReferralFulfilled() {
+  async markReferralFulfilled(referralId) {
+    if (!referralId) return { ok: true };
+    await api.post(`/receptionist/ipd/referrals/${encodeURIComponent(referralId)}/fulfill`);
     return { ok: true };
   },
 };
@@ -268,16 +277,17 @@ export default function AdmitPatient() {
 
   const [doctors, setDoctors] = useState([]);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
-  const [nurses, setNurses] = useState([]);
-  const [loadingNurses, setLoadingNurses] = useState(false);
 
   const [beds, setBeds] = useState([]);
   const [wards, setWards] = useState(INITIAL_WARDS);
   const [loadingBeds, setLoadingBeds] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState(null);
+  const [nurseAssignment, setNurseAssignment] = useState({ allowed: false, shift: null, loading: true });
+  const [availableNurses, setAvailableNurses] = useState([]);
 
   const [pendingReferrals, setPendingReferrals] = useState([]);
   const [loadingPending, setLoadingPending] = useState(true);
@@ -289,7 +299,6 @@ export default function AdmitPatient() {
     department: '',
     doctorId: '',
     doctorName: '',
-    nurseId: '',
     admissionDate: todayISO,
     expectedStay: '',
     wardId: UNIVERSAL_DUMMY_WARD_ID,
@@ -304,6 +313,7 @@ export default function AdmitPatient() {
     paymentMode: 'Cash',
     paymentStatus: 'Pending',
     status: 'Admitted',
+    nurseId: '',
   });
 
   const fetchPatientSuggestions = useCallback(async (q) => {
@@ -324,16 +334,6 @@ export default function AdmitPatient() {
       setDoctors(dept ? list.filter((d) => String(d.specialization || '').trim() === dept) : list);
     } finally {
       setLoadingDoctors(false);
-    }
-  }, []);
-
-  const fetchNurses = useCallback(async () => {
-    setLoadingNurses(true);
-    try {
-      const list = await apiClient.fetchNurses();
-      setNurses(list);
-    } finally {
-      setLoadingNurses(false);
     }
   }, []);
 
@@ -361,13 +361,35 @@ export default function AdmitPatient() {
     }
   }, []);
 
+  const loadNurseAssignmentCapability = useCallback(async () => {
+    setNurseAssignment((p) => ({ ...p, loading: true }));
+    try {
+      const result = await apiClient.fetchCanAssignNurse();
+      setNurseAssignment({
+        allowed: Boolean(result.canAssignNurse),
+        shift: result.shift || null,
+        loading: false,
+      });
+      if (result.canAssignNurse) {
+        const nurses = await apiClient.fetchAvailableNurses();
+        setAvailableNurses(nurses);
+      } else {
+        setAvailableNurses([]);
+      }
+    } catch (err) {
+      setNurseAssignment({ allowed: false, shift: null, loading: false });
+      setAvailableNurses([]);
+      console.warn('can-assign-nurse failed', err?.response?.status, err?.response?.data?.message || err?.message);
+    }
+  }, []);
+
   useEffect(() => {
     fetchPendingReferrals();
   }, [fetchPendingReferrals]);
 
   useEffect(() => {
-    fetchNurses();
-  }, [fetchNurses]);
+    loadNurseAssignmentCapability();
+  }, [loadNurseAssignmentCapability]);
 
   useEffect(() => {
     let alive = true;
@@ -404,16 +426,31 @@ export default function AdmitPatient() {
     return () => clearTimeout(t);
   }, [selectedPatient]);
 
+  const applyPatientToForm = useCallback((row, { resetClinical = true } = {}) => {
+    setForm((prev) => {
+      const base = row.isAyushman ? applyAyushmanAdmitBilling(prev) : prev;
+      return {
+        ...base,
+        emergencyName: row.emergencyName || '',
+        emergencyPhone: row.emergencyPhone || '',
+        ...(resetClinical ? { diagnosis: '', notes: '' } : {}),
+      };
+    });
+    if (row.hasActiveIpdAdmission) {
+      setSubmitError('This patient already has an active IPD admission.');
+    } else {
+      setSubmitError('');
+    }
+  }, []);
+
   const selectPatient = useCallback(async (p) => {
     if (!p?.uhid && !p?.name) return;
     const row = await resolvePatientWithSponsor(p);
     setSelectedPatient(row);
-    setSearchQuery(`${row.name || ''} · ${row.uhid || ''}`.trim());
+    setSearchQuery(`${row.name || ''} � ${row.uhid || ''}`.trim());
     setDropdownOpen(false);
-    if (row.isAyushman) {
-      setForm((prev) => applyAyushmanAdmitBilling(prev));
-    }
-  }, []);
+    applyPatientToForm(row);
+  }, [applyPatientToForm]);
 
   useEffect(() => {
     const applyPatient = async (p) => {
@@ -447,10 +484,18 @@ export default function AdmitPatient() {
             gender: d.gender || '',
             sponsor: d.sponsor || '',
             isAyushman: d.isAyushman,
+            emergencyName: d.emergencyName || '',
+            emergencyPhone: d.emergencyPhone || '',
+            hasActiveIpdAdmission: d.hasActiveIpdAdmission === true,
           });
           if (d.department) {
             prefillDoctorIdRef.current = null;
-            setForm((prev) => ({ ...prev, department: d.department }));
+            setForm((prev) => ({
+              ...prev,
+              department: d.department,
+              emergencyName: d.emergencyName || prev.emergencyName,
+              emergencyPhone: d.emergencyPhone || prev.emergencyPhone,
+            }));
           }
         } catch {
           // leave form empty if lookup fails
@@ -552,6 +597,8 @@ export default function AdmitPatient() {
         department: row.department || '',
         diagnosis: row.provisionalDiagnosis || '',
         notes: row.clinicalNote || prev.notes,
+        emergencyName: patientRow.emergencyName || prev.emergencyName,
+        emergencyPhone: patientRow.emergencyPhone || prev.emergencyPhone,
         roomCharge: String(rc),
         wardId: UNIVERSAL_DUMMY_WARD_ID,
         bedId: '',
@@ -561,10 +608,15 @@ export default function AdmitPatient() {
     });
 
     setSelectedPatient(patientRow);
-    setSearchQuery(`${row.name} · ${row.uhid}`);
+    setSearchQuery(`${row.name} � ${row.uhid}`);
     setDropdownOpen(false);
     setActiveReferralId(row.referralId);
     setErrors((e) => ({ ...e, patient: undefined }));
+    if (patientRow.hasActiveIpdAdmission) {
+      setSubmitError('This patient already has an active IPD admission.');
+    } else {
+      setSubmitError('');
+    }
   };
 
   const handleAdmitFromReferral = (row) => {
@@ -577,7 +629,6 @@ export default function AdmitPatient() {
     if (!form.admissionType) next.admissionType = 'Required';
     if (!form.department) next.department = 'Required';
     if (!form.doctorId) next.doctorId = 'Required';
-    if (!form.nurseId) next.nurseId = 'Required';
     if (!form.admissionDate) next.admissionDate = 'Required';
     if (!form.wardId) next.wardId = 'Required';
     if (!form.bedId) next.bedId = 'Select a bed';
@@ -586,11 +637,15 @@ export default function AdmitPatient() {
     if (!form.emergencyPhone?.trim() || String(form.emergencyPhone).length < 10) next.emergencyPhone = 'Valid phone required';
     if (!form.admissionCharge?.trim() && form.admissionCharge !== '0') next.admissionCharge = 'Required';
     if (!selectedPatient?.isAyushman && !form.advance?.trim() && form.advance !== '0') next.advance = 'Required';
+    if (nurseAssignment.allowed && !form.nurseId) {
+      next.nurseId = 'Select a nurse (evening/night shift)';
+    }
     return next;
   };
 
   const resetForm = () => {
     setErrors({});
+    setSubmitError('');
     setSuccess(null);
     prefillDoctorIdRef.current = null;
     setActiveReferralId(null);
@@ -606,7 +661,6 @@ export default function AdmitPatient() {
       department: '',
       doctorId: '',
       doctorName: '',
-      nurseId: '',
       admissionDate: todayISO,
       expectedStay: '',
       wardId: UNIVERSAL_DUMMY_WARD_ID,
@@ -621,15 +675,22 @@ export default function AdmitPatient() {
       paymentMode: 'Cash',
       paymentStatus: 'Pending',
       status: 'Admitted',
+      nurseId: '',
     });
+    loadNurseAssignmentCapability();
   };
 
   const handleAdmitPatient = async (e) => {
     e.preventDefault();
     setErrors({});
+    setSubmitError('');
     const nextErrors = validate();
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
+      return;
+    }
+    if (selectedPatient?.hasActiveIpdAdmission) {
+      setSubmitError('This patient already has an active IPD admission.');
       return;
     }
 
@@ -644,13 +705,17 @@ export default function AdmitPatient() {
       const admissionPayload = {
         uhid: selectedPatient.uhid,
         doctorId: form.doctorId,
-        nurseId: form.nurseId,
         department: form.department,
         admissionType: form.admissionType,
         admissionDate: form.admissionDate,
         wardId: effectiveWardId,
         bedId: form.bedId,
         status: 'ADMITTED',
+        diagnosis: form.diagnosis.trim(),
+        notes: form.notes.trim(),
+        expectedStay: form.expectedStay.trim(),
+        emergencyName: form.emergencyName.trim(),
+        emergencyPhone: form.emergencyPhone.trim(),
         billing: {
           admissionCharge: Number(form.admissionCharge || 0),
           roomChargePerDay: Number(form.roomCharge || 0),
@@ -660,7 +725,13 @@ export default function AdmitPatient() {
         },
       };
 
-      const created = await apiClient.createAdmission(admissionPayload);
+      // Night reception: include nurseId
+      if (nurseAssignment.allowed && form.nurseId) {
+        admissionPayload.nurseId = form.nurseId;
+      }
+
+      const responseData = await apiClient.createAdmission(admissionPayload);
+      const created = responseData?.admission;
 
       if (activeReferralId) {
         await apiClient.markReferralFulfilled(activeReferralId);
@@ -669,13 +740,26 @@ export default function AdmitPatient() {
       }
       await fetchPendingReferrals();
 
+      const assignedNurse = responseData?.nurseAssigned && form.nurseId
+        ? availableNurses.find((n) => n.id === form.nurseId)
+        : null;
+
       setSuccess({
         ipdId: created?.ipdNumber || created?.id,
         patientName: selectedPatient.name,
         ward: ward?.name || bed?.wardName || 'All active wards',
         bed: bed?.code,
         doctor: doctor?.name,
+        nurseAssigned: responseData?.nurseAssigned,
+        hrRequest: responseData?.hrRequest,
+        nurseName: assignedNurse?.name || null,
       });
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Could not create admission. Please check bed availability and try again.';
+      setSubmitError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -715,6 +799,21 @@ export default function AdmitPatient() {
                 <span className="font-semibold text-gray-900">{success.doctor}</span>
               </div>
             </div>
+            {success.nurseAssigned ? (
+              <div className="mt-4 rounded-xl bg-emerald-50 ring-1 ring-emerald-200 p-3 text-left">
+                <p className="text-xs font-semibold text-emerald-800">Nurse Assigned Directly</p>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  {success.nurseName
+                    ? `${success.nurseName} has been assigned as the nurse for this admission.`
+                    : 'A nurse has been assigned directly. The patient is now visible in the Nurse Portal.'}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl bg-amber-50 ring-1 ring-amber-200 p-3 text-left">
+                <p className="text-xs font-semibold text-amber-800">IPD Request to HR</p>
+                <p className="text-xs text-amber-700 mt-0.5">Nurse assignment request has been sent to HR. A nurse will be assigned shortly.</p>
+              </div>
+            )}
             <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
               <button
                 type="button"
@@ -730,7 +829,7 @@ export default function AdmitPatient() {
                   resetForm();
                 }}
                 className="flex-1 rounded-xl py-3 text-sm font-extrabold text-white shadow-md transition hover:shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 55%, #1d4ed8 100%)' }}
+                style={{ backgroundColor: '#0f2d5e' }}
               >
                 Admit another patient
               </button>
@@ -750,7 +849,7 @@ export default function AdmitPatient() {
         <AdmitSection
           icon={MdPerson}
           title="Patient selection"
-          subtitle="Search manually, or choose a patient referred by doctor from the table below"
+          subtitle="Search any registered patient for Direct IPD admission"
           headerRight={errors.patient ? <span className="text-xs font-extrabold text-red-600">{errors.patient}</span> : null}
           noBodyPadding
           hideHeader
@@ -776,7 +875,7 @@ export default function AdmitPatient() {
                 type="button"
                 onClick={() => navigate('/dashboard/reception/patients/register')}
                 className="shrink-0 flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-extrabold text-white shadow-sm transition hover:shadow-md whitespace-nowrap"
-                style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}
+                style={{ backgroundColor: '#0077B6' }}
                 title="Register new patient"
               >
                 <MdAdd className="h-4 w-4" /> New patient
@@ -785,13 +884,13 @@ export default function AdmitPatient() {
             {dropdownOpen && !selectedPatient && searchQuery.trim().length >= 2 ? (
               <div className="absolute left-0 right-0 z-[100] mt-2 max-h-72 overflow-y-auto rounded-2xl border border-gray-200/80 bg-white shadow-xl shadow-slate-200/40 ring-1 ring-black/5">
                 <div className="flex justify-between border-b border-gray-100 bg-gradient-to-r from-slate-50 to-white px-4 py-2 text-[11px] font-extrabold text-gray-500">
-                  <span>{loadingSuggestions ? 'Searching…' : `${suggestions.length} match(es)`}</span>
+                  <span>{loadingSuggestions ? 'Searching�' : `${suggestions.length} match(es)`}</span>
                   <button type="button" className="font-extrabold text-blue-700 hover:text-blue-900" onClick={() => setDropdownOpen(false)}>
                     Close
                   </button>
                 </div>
                 {loadingSuggestions ? (
-                  <div className="px-4 py-6 text-sm text-gray-400 text-center">Loading suggestions…</div>
+                  <div className="px-4 py-6 text-sm text-gray-400 text-center">Loading suggestions�</div>
                 ) : suggestions.length ? (
                   suggestions.map((p) => (
                     <button
@@ -812,7 +911,7 @@ export default function AdmitPatient() {
                         <p className="font-extrabold text-gray-900 truncate">{p.name}</p>
                         <p className="text-xs text-gray-500 truncate font-mono font-bold text-blue-600">{p.uhid}</p>
                         <p className="text-xs text-gray-500">
-                          <MdPhone className="inline w-3 h-3" /> {p.mobile} · {p.age} yrs · {p.gender}
+                          <MdPhone className="inline w-3 h-3" /> {p.mobile} � {p.age} yrs � {p.gender}
                         </p>
                       </div>
                     </button>
@@ -833,7 +932,7 @@ export default function AdmitPatient() {
                 <div className="min-w-0">
                   <p className="text-sm font-extrabold text-gray-900">Doctor referred for IPD</p>
                   <p className="text-xs text-gray-500">
-                    
+                    Optional queue \u2014 patients referred by doctors. Direct IPD above does not need this.
                   </p>
                 </div>
               </div>
@@ -868,13 +967,13 @@ export default function AdmitPatient() {
                   {loadingPending ? (
                     <tr>
                       <td colSpan={10} className="px-4 py-10 text-center text-sm text-gray-400">
-                        Loading doctor referrals…
+                        Loading doctor referrals�
                       </td>
                     </tr>
                   ) : pendingReferrals.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="px-4 py-10 text-center text-sm text-gray-500">
-                        No pending referrals right now. Use search above or ask the doctor to mark “Admit” from their portal.
+                        No pending doctor referrals. Use Direct IPD admission above - doctor referral is not required.
                       </td>
                     </tr>
                   ) : (
@@ -901,7 +1000,7 @@ export default function AdmitPatient() {
                           </td>
                           <td className="px-3 py-3 align-top font-mono text-xs font-semibold text-gray-800">{row.uhid}</td>
                           <td className="hidden px-3 py-3 align-top text-xs text-gray-600 sm:table-cell">
-                            {row.age} · {row.gender}
+                            {row.age} � {row.gender}
                           </td>
                           <td className="hidden px-3 py-3 align-top font-mono text-xs text-gray-600 md:table-cell">{row.mobile}</td>
                           <td className="px-3 py-3 align-top text-xs font-semibold text-gray-800">{row.department}</td>
@@ -911,10 +1010,10 @@ export default function AdmitPatient() {
                             </span>
                           </td>
                           <td className="hidden px-3 py-3 align-top text-xs text-gray-700 lg:table-cell">
-                            {row.referBy?.trim() ? row.referBy : '—'}
+                            {row.referBy?.trim() ? row.referBy : '�'}
                           </td>
                           <td className="hidden px-3 py-3 align-top text-xs font-semibold text-gray-800 lg:table-cell">
-                            {row.consultantBy || row.referringDoctor || '—'}
+                            {row.consultantBy || row.referringDoctor || '�'}
                           </td>
                           <td className="px-3 py-3 align-top text-xs text-gray-600">{formatShortDate(row.requestedAt)}</td>
                           <td className="px-3 py-3 align-middle text-right">
@@ -965,12 +1064,17 @@ export default function AdmitPatient() {
                     </div>
                     <p className="mt-0.5 font-mono text-xs font-bold text-blue-700">{selectedPatient.uhid}</p>
                     <p className="mt-1 text-xs text-gray-600">
-                      {selectedPatient.age} yrs · {selectedPatient.gender} · <MdPhone className="inline h-3 w-3" />{' '}
+                      {selectedPatient.age} yrs � {selectedPatient.gender} � <MdPhone className="inline h-3 w-3" />{' '}
                       {selectedPatient.mobile}
                     </p>
                     {selectedPatient.isAyushman ? (
                       <p className="mt-1 text-xs font-semibold text-emerald-800">
-                        Patient Type: Ayushman · Sponsor: Ayushman — {AYUSHMAN_PAYMENT_LABEL}
+                        Patient Type: Ayushman � Sponsor: Ayushman � {AYUSHMAN_PAYMENT_LABEL}
+                      </p>
+                    ) : null}
+                    {selectedPatient.hasActiveIpdAdmission ? (
+                      <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-900">
+                        Active IPD admission already exists for this patient.
                       </p>
                     ) : null}
                   </div>
@@ -982,6 +1086,7 @@ export default function AdmitPatient() {
                     setActiveReferralId(null);
                     setSelectedPatient(null);
                     setSearchQuery('');
+                    setSubmitError('');
                   }}
                   className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-extrabold text-blue-800 shadow-sm transition hover:bg-blue-50"
                 >
@@ -1031,7 +1136,7 @@ export default function AdmitPatient() {
                     className={selectCls}
                     disabled={!form.department || loadingDoctors}
                   >
-                    <option value="">{!form.department ? 'Select department first' : loadingDoctors ? 'Loading…' : 'Select doctor'}</option>
+                    <option value="">{!form.department ? 'Select department first' : loadingDoctors ? 'Loading�' : 'Select doctor'}</option>
                     {doctors.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name}
@@ -1040,17 +1145,44 @@ export default function AdmitPatient() {
                   </select>
                   {errors.doctorId ? <p className="mt-1 text-xs font-bold text-red-600">{errors.doctorId}</p> : null}
                 </Field>
-                <Field label="Assigned nurse" required>
-                  <select name="nurseId" value={form.nurseId} onChange={handleChange} className={selectCls} disabled={loadingNurses}>
-                    <option value="">{loadingNurses ? 'Loading…' : 'Select nurse'}</option>
-                    {nurses.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.name}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.nurseId ? <p className="mt-1 text-xs font-bold text-red-600">{errors.nurseId}</p> : null}
-                </Field>
+                {nurseAssignment.loading ? (
+                  <Field label="Nurse Assignment">
+                    <div className="rounded-xl bg-gray-50 ring-1 ring-gray-200 px-3 py-2.5 text-xs text-gray-500 font-medium">
+                      Checking shift�
+                    </div>
+                  </Field>
+                ) : nurseAssignment.allowed ? (
+                  <Field
+                    label={`Assign Nurse (${nurseAssignment.shift === 'NIGHT' ? 'Night shift' : nurseAssignment.shift === 'EVENING' ? 'Evening shift' : 'Evening / Night'})`}
+                    required
+                    hint="Select nurse � assigned immediately, HR gets audit record"
+                  >
+                    <select
+                      name="nurseId"
+                      value={form.nurseId}
+                      onChange={handleChange}
+                      className={selectCls}
+                    >
+                      <option value="">Select nurse</option>
+                      {availableNurses.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.name} {n.activePatients > 0 ? `(${n.activePatients} patients)` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.nurseId ? <p className="mt-1 text-xs font-bold text-red-600">{errors.nurseId}</p> : null}
+                    <p className="mt-1.5 text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      {nurseAssignment.shift === 'NIGHT' ? 'Night' : nurseAssignment.shift === 'EVENING' ? 'Evening' : 'Evening/Night'} shift � assign nurse now (no HR wait)
+                    </p>
+                  </Field>
+                ) : (
+                  <Field label="Nurse assignment">
+                    <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-3 py-2.5 text-xs text-amber-800 font-medium">
+                      Day shift � HR will assign nurse after admission
+                    </div>
+                  </Field>
+                )}
                 <Field label="Admission date" required>
                   <input name="admissionDate" type="date" value={form.admissionDate} onChange={handleChange} className={inputCls} />
                 </Field>
@@ -1099,7 +1231,7 @@ export default function AdmitPatient() {
                 <div>
                   <p className="mb-2 text-xs font-extrabold text-gray-600">Select bed</p>
                   {loadingBeds ? (
-                    <div className="rounded-xl border border-dashed border-gray-200 py-10 text-center text-sm text-gray-400">Loading bed map…</div>
+                    <div className="rounded-xl border border-dashed border-gray-200 py-10 text-center text-sm text-gray-400">Loading bed map�</div>
                   ) : form.wardId ? (
                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
                       {beds.map((b) => {
@@ -1190,16 +1322,16 @@ export default function AdmitPatient() {
               </AdmitSection>
             </div>
 
-            <AdmitSection icon={MdPayments} title="Billing setup" subtitle="Charges, advance & payment mode — IPD ID is issued on submit">
+            <AdmitSection icon={MdPayments} title="Billing setup" subtitle="Charges, advance & payment mode � IPD ID is issued on submit">
               {selectedPatient?.isAyushman ? (
                 <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">
                   {AYUSHMAN_BILLING_NOTICE}
-                  <span className="mt-1 block">Charges normal daalein; admit par slip/bill par {AYUSHMAN_PAYMENT_LABEL} — patient se due nahi.</span>
+                  <span className="mt-1 block">Charges normal daalein; admit par slip/bill par {AYUSHMAN_PAYMENT_LABEL} � patient se due nahi.</span>
                 </p>
               ) : null}
               <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Admission charges (₹)" required>
+                  <Field label="Admission charges (?)" required>
                     <input
                       name="admissionCharge"
                       value={form.admissionCharge}
@@ -1209,7 +1341,7 @@ export default function AdmitPatient() {
                     />
                     {errors.admissionCharge ? <p className="mt-1 text-xs font-bold text-red-600">{errors.admissionCharge}</p> : null}
                   </Field>
-                  <Field label="Room charges / day (₹)" hint="Auto from admission type (editable)">
+                  <Field label="Room charges / day (?)" hint="Auto from admission type (editable)">
                     <input
                       name="roomCharge"
                       value={form.roomCharge}
@@ -1218,7 +1350,7 @@ export default function AdmitPatient() {
                       inputMode="decimal"
                     />
                   </Field>
-                  <Field label="Advance payment (₹)" required={!selectedPatient?.isAyushman}>
+                  <Field label="Advance payment (?)" required={!selectedPatient?.isAyushman}>
                     <input
                       name="advance"
                       value={form.advance}
@@ -1255,15 +1387,20 @@ export default function AdmitPatient() {
                   {selectedPatient?.isAyushman ? (
                     <>
                       {' '}
-                      · <span className="font-extrabold text-emerald-700">{AYUSHMAN_PAYMENT_LABEL}</span>
+                      � <span className="font-extrabold text-emerald-700">{AYUSHMAN_PAYMENT_LABEL}</span>
                     </>
                   ) : null}{' '}
-                  · IPD number is generated when you submit.
+                  � IPD number is generated when you submit.
                 </p>
               </div>
             </AdmitSection>
 
             <div className="sticky bottom-0 z-10 w-full border-t border-gray-200 bg-white/95 px-3 py-4 shadow-[0_-8px_30px_rgba(15,23,42,0.06)] backdrop-blur-sm sm:px-4">
+              {submitError ? (
+                <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+                  {submitError}
+                </div>
+              ) : null}
               <div className="flex w-full max-w-none flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <button
                   type="button"
@@ -1281,11 +1418,11 @@ export default function AdmitPatient() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || selectedPatient?.hasActiveIpdAdmission}
                   className="order-1 flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-extrabold text-white shadow-md transition hover:shadow-lg disabled:opacity-60 sm:order-3 sm:min-w-[240px] sm:flex-none"
-                  style={{ background: 'linear-gradient(135deg, #065f46, #059669)' }}
+                  style={{ backgroundColor: '#059669' }}
                 >
-                  <MdSave className="h-4 w-4" /> {submitting ? 'Submitting…' : 'Admit patient'}
+                  <MdSave className="h-4 w-4" /> {submitting ? 'Submitting�' : 'Admit patient'}
                 </button>
               </div>
             </div>
@@ -1295,3 +1432,4 @@ export default function AdmitPatient() {
     </div>
   );
 }
+

@@ -34,12 +34,28 @@ function inIcuWard(p) {
     .includes('ICU');
 }
 
+function mapBackendNotification(n) {
+  const isUnread = !n.readAt;
+  return {
+    id: n.id,
+    admissionId: n.admissionId || null,
+    patientName: n.patientName || null,
+    type: n.title || n.type || 'Alert',
+    message: n.message || '',
+    time: n.createdAt,
+    status: isUnread ? 'unread' : 'read',
+    highlight: false,
+  };
+}
+
 export default function Notifications() {
   const navigate = useNavigate();
 
   const [filter, setFilter] = useState('all');
-  const [notifications, setNotifications] = useState([]);
+  const [localNotifications, setLocalNotifications] = useState([]);
+  const [serverNotifications, setServerNotifications] = useState([]);
   const [wardPatients, setWardPatients] = useState([]);
+  const [loadError, setLoadError] = useState('');
 
   const medicineSchedule = useMemo(() => {
     const icu = wardPatients.filter(inIcuWard);
@@ -54,6 +70,26 @@ export default function Notifications() {
     }));
   }, [wardPatients]);
 
+  // Fetch real notifications from backend
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await api.get('/nurse/notifications');
+        if (!alive) return;
+        const items = Array.isArray(res.data?.notifications) ? res.data.notifications : [];
+        setServerNotifications(items.map(mapBackendNotification));
+        setLoadError('');
+      } catch (e) {
+        if (!alive) return;
+        console.error('Failed to fetch nurse notifications:', e);
+        setLoadError('Could not load notifications');
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Fetch ward patients for local alerts
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -67,9 +103,7 @@ export default function Notifications() {
         setWardPatients([]);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
 
   const generateMedicineAlerts = (existing) => {
@@ -153,7 +187,7 @@ export default function Notifications() {
       });
     }
 
-    setNotifications((prev) => {
+    setLocalNotifications((prev) => {
       const base = prev.length ? prev : [...critical, ...info];
       return generateMedicineAlerts(base);
     });
@@ -162,14 +196,27 @@ export default function Notifications() {
 
   useEffect(() => {
     const t = window.setInterval(() => {
-      setNotifications((prev) => generateMedicineAlerts(prev));
+      setLocalNotifications((prev) => generateMedicineAlerts(prev));
     }, 60 * 1000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleMarkAsRead = (id) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, status: 'read' } : n)));
+  // Combined notifications: server (backend) + local
+  const notifications = useMemo(() => [...serverNotifications, ...localNotifications], [serverNotifications, localNotifications]);
+
+  const handleMarkAsRead = async (id) => {
+    // If it's a real server notification (UUID), call backend
+    if (/^[0-9a-f-]{36}$/i.test(id)) {
+      setServerNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, status: 'read' } : n)));
+      try {
+        await api.patch('/nurse/notifications/' + id + '/read');
+      } catch (e) {
+        console.error('Mark notification as read error:', e);
+      }
+    } else {
+      setLocalNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, status: 'read' } : n)));
+    }
   };
 
   const handleFilter = (key) => setFilter(key);
@@ -206,6 +253,10 @@ export default function Notifications() {
             Showing <b>{filtered.length}</b> / {notifications.length}
           </div>
         </div>
+
+        {loadError && (
+          <div className="notifications-empty" style={{ color: '#dc2626' }}>{loadError}</div>
+        )}
 
         {filtered.length === 0 ? (
           <div className="notifications-empty">No notifications</div>

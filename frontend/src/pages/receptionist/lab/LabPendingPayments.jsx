@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { MdPayments, MdPrint, MdRefresh } from 'react-icons/md';
 import api from '../../../utils/api';
 import { printLabBillSlip } from '../../../utils/printLabBillSlip';
@@ -18,6 +18,8 @@ function formatDate(d) {
 }
 
 export default function LabPendingPayments() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,6 +27,7 @@ export default function LabPendingPayments() {
   const [payAmount, setPayAmount] = useState('');
   const [payMode, setPayMode] = useState('Cash');
   const [paySubmitting, setPaySubmitting] = useState(false);
+  const [autoCollectHandled, setAutoCollectHandled] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +52,18 @@ export default function LabPendingPayments() {
     setPayAmount(String(row.pendingAmount ?? 0));
     setPayMode(row.paymentMode && row.paymentMode !== 'PAID BY AYUSHMAN' ? row.paymentMode : 'Cash');
   };
+
+  // Jab "Bill & Lab" se yahan redirect hua ho, us newly-created bill ka Collect modal
+  // apne-aap khol do taaki receptionist turant payment le sake.
+  const autoCollectBillId = location.state?.collectBillId || null;
+  useEffect(() => {
+    if (!autoCollectBillId || autoCollectHandled || loading) return;
+    const target = rows.find((r) => r.billId === autoCollectBillId);
+    if (target) openPay(target);
+    setAutoCollectHandled(true);
+    // Navigation state clear karo taaki manual refresh pe modal dobara na khule.
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [autoCollectBillId, autoCollectHandled, loading, rows, navigate, location.pathname]);
 
   const submitPay = async () => {
     if (!payRow?.billId) return;
@@ -112,7 +127,7 @@ export default function LabPendingPayments() {
               className="inline-flex items-center h-10 px-4 rounded-xl text-sm font-extrabold border bg-white"
               style={{ borderColor: 'rgba(0,0,0,0.12)' }}
             >
-              Advised OPD tests
+              Advised Lab Tests
             </Link>
             <button
               type="button"

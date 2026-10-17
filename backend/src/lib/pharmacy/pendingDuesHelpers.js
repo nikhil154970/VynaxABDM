@@ -84,7 +84,10 @@ function buildPendingWhere({ q, patientType, status, dateFrom, dateTo } = {}) {
   const where = {
     status: { in: PENDING_BILL_STATUSES },
     pendingAmount: { gt: 0 },
-    NOT: { status: 'CANCELLED' },
+    NOT: [
+      { status: 'CANCELLED' },
+      { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
+    ],
   };
 
   if (q) {

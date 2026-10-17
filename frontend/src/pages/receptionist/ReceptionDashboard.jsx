@@ -138,7 +138,7 @@ export default function ReceptionDashboard() {
   }, [stats.totalBeds, stats.occupiedBeds, opdItems]);
 
   return (
-    <div className="w-full max-w-none bg-gradient-to-b from-slate-100/50 to-gray-50 min-h-0">
+    <div className="w-full max-w-none bg-white min-h-0">
       <div className="space-y-5 px-4 py-6 sm:px-6 lg:px-8 xl:px-10 pb-12">
         {/* Top bar */}
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -163,7 +163,7 @@ export default function ReceptionDashboard() {
               type="button"
               onClick={() => navigate('/dashboard/reception/patients/register')}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold text-white shadow-sm transition hover:shadow-md"
-              style={{ background: 'linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 60%, #1d4ed8 100%)' }}
+              style={{ background: '#001B48' }}
             >
               <MdAdd className="h-4 w-4" />
               Register patient
@@ -187,6 +187,7 @@ export default function ReceptionDashboard() {
               icon: MdPeople,
               bg: '#0f2d5e',
               light: '#dbeafe',
+              path: '/dashboard/reception/patients',
             },
             {
               label: 'OPD (today)',
@@ -195,6 +196,7 @@ export default function ReceptionDashboard() {
               icon: MdCalendarToday,
               bg: '#1d4ed8',
               light: '#dbeafe',
+              path: '/dashboard/reception/opd',
             },
             {
               label: 'Active IPD',
@@ -203,6 +205,7 @@ export default function ReceptionDashboard() {
               icon: MdBed,
               bg: '#92400e',
               light: '#ffedd5',
+              path: '/dashboard/reception/ipd',
             },
             {
               label: 'Pending bills (today)',
@@ -211,11 +214,17 @@ export default function ReceptionDashboard() {
               icon: MdReceiptLong,
               bg: '#991b1b',
               light: '#fee2e2',
+              path: '/dashboard/reception/billing',
             },
           ].map((s) => {
             const Icon = s.icon;
             return (
-              <div key={s.label} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:shadow-md">
+              <button
+                key={s.label}
+                type="button"
+                onClick={() => s.path && navigate(s.path)}
+                className="text-left w-full rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:shadow-md hover:border-blue-100 hover:bg-blue-50/10 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: s.light }}>
                     <Icon className="h-5 w-5" style={{ color: s.bg }} />
@@ -226,7 +235,7 @@ export default function ReceptionDashboard() {
                     <p className="mt-0.5 text-[11px] text-gray-400 truncate">{s.sub}</p>
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -236,7 +245,7 @@ export default function ReceptionDashboard() {
           <div className="xl:col-span-2 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
             <div
               className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 sm:px-5"
-              style={{ background: 'linear-gradient(135deg, #1e3a8a08, #1e40af05)' }}
+              style={{ background: 'rgba(0, 119, 182, 0.04)' }}
             >
               <div>
                 <p className="text-sm font-extrabold text-gray-900">Today’s OPD queue</p>
@@ -320,7 +329,7 @@ export default function ReceptionDashboard() {
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
               <div
                 className="border-b border-gray-100 px-4 py-3 sm:px-5"
-                style={{ background: 'linear-gradient(135deg, #1e3a8a08, #1e40af05)' }}
+                style={{ background: 'rgba(0, 119, 182, 0.04)' }}
               >
                 <p className="text-sm font-extrabold text-gray-900 flex items-center gap-2">
                   <MdBed className="h-4 w-4 text-blue-600" /> Bed occupancy
@@ -358,7 +367,7 @@ export default function ReceptionDashboard() {
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
               <div
                 className="border-b border-gray-100 px-4 py-3 sm:px-5"
-                style={{ background: 'linear-gradient(135deg, #1e3a8a08, #1e40af05)' }}
+                style={{ background: 'rgba(0, 119, 182, 0.04)' }}
               >
                 <p className="text-sm font-extrabold text-gray-900">Recent registrations</p>
                 <p className="text-xs text-gray-400 mt-0.5">Latest patient entries</p>
@@ -407,8 +416,8 @@ export default function ReceptionDashboard() {
               { label: 'Book Appointment', icon: MdCalendarToday, color: '#065f46', bg: '#d1fae5', to: '/dashboard/reception/appointments/book' },
               { label: 'Generate Bill', icon: MdReceiptLong, color: '#92400e', bg: '#fef3c7', to: '/dashboard/reception/billing/generate' },
               { label: 'Pending lab payment', icon: MdScience, color: '#0e7490', bg: '#cffafe', to: '/dashboard/reception/lab/pending-payment' },
-              { label: 'Advised OPD tests', icon: MdScience, color: '#0369a1', bg: '#e0f2fe', to: '/dashboard/reception/lab/advised' },
-              { label: 'Admit Patient', icon: MdBed, color: '#6b21a8', bg: '#f3e8ff', to: '/dashboard/reception/ipd/admit' },
+              { label: 'Advised Lab Tests', icon: MdScience, color: '#0369a1', bg: '#e0f2fe', to: '/dashboard/reception/lab/advised' },
+              { label: 'Direct IPD Admit', icon: MdBed, color: '#6b21a8', bg: '#f3e8ff', to: '/dashboard/reception/ipd/admit' },
             ].map((action) => {
               const Icon = action.icon;
               return (
@@ -430,3 +439,4 @@ export default function ReceptionDashboard() {
     </div>
   );
 }
+

@@ -1,0 +1,8 @@
+{
+  "watch": ["src", "server.js"],
+  "ext": "js",
+  "ignore": ["node_modules/**", "scripts/**", "prisma/**", "test/**", "**/*.test.js", "**/*.log", "**/*.txt", ".env", ".env.*"],
+  "delay": 2500,
+  "signal": "SIGTERM",
+  "legacyWatch": true
+}

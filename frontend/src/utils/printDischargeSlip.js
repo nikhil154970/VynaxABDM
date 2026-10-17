@@ -30,7 +30,7 @@ function fmtDateTime(v) {
 import { isAyushmanSponsor, slipSponsorBannerHtml, AYUSHMAN_PAYMENT_LABEL } from './ayushmanBilling';
 
 /**
- * Opens print dialog with IPD discharge slip (New H.T. Hospital branding).
+ * Opens print dialog with IPD discharge slip (MQE HIMS branding).
  * @param {{ patient: object }} opts — patient should include billing, lineItems, dischargeStatus, dischargedAt, etc.
  */
 export function printDischargeSlip({ patient }) {

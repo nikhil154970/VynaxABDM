@@ -38,6 +38,8 @@ const getOverview = async (req, res) => {
       batches,
       dueAgg,
       returnsAgg,
+      customerReturnsAgg,
+      customerReturnsInRange,
       billsInRange,
       grnsInRange,
       billItems,
@@ -65,6 +67,14 @@ const getOverview = async (req, res) => {
       prisma.pharmacyReturn.aggregate({
         where: { status: 'COMPLETED', ...returnDate },
         _sum: { totalAmount: true },
+      }),
+      prisma.pharmacyReturn.aggregate({
+        where: { status: 'COMPLETED', returnType: 'CUSTOMER_RETURN', ...returnDate },
+        _sum: { totalAmount: true },
+      }),
+      prisma.pharmacyReturn.findMany({
+        where: { status: 'COMPLETED', returnType: 'CUSTOMER_RETURN', ...returnDate },
+        select: { createdAt: true, totalAmount: true },
       }),
       prisma.pharmacyBill.findMany({
         where: { ...BILL_FINALIZED, ...billDate },
@@ -103,7 +113,24 @@ const getOverview = async (req, res) => {
       batches.reduce((s, b) => s + b.availableQty * toNum(b.purchasePrice), 0)
     );
 
-    const salesTrend = groupByDay(billsInRange, 'createdAt', 'grandTotal');
+    const salesTrendRaw = groupByDay(billsInRange, 'createdAt', 'grandTotal');
+    const returnsTrendRaw = groupByDay(
+      customerReturnsInRange.map((r) => ({ createdAt: r.createdAt, grandTotal: r.totalAmount })),
+      'createdAt',
+      'grandTotal'
+    );
+    const returnsTrendMap = new Map();
+    returnsTrendRaw.forEach((item) => {
+      returnsTrendMap.set(item.label, toNum(item.amount));
+    });
+    const salesTrend = salesTrendRaw.map((item) => {
+      const ret = returnsTrendMap.get(item.label) || 0;
+      return {
+        label: item.label,
+        amount: roundMoney(Math.max(0, toNum(item.amount) - ret)),
+      };
+    });
+
     const purchaseTrend = groupByDay(
       grnsInRange.map((g) => ({ createdAt: g.receivedDate, grandTotal: g.grandTotal })),
       'createdAt',
@@ -150,7 +177,7 @@ const getOverview = async (req, res) => {
 
     return res.json({
       cards: {
-        totalRevenue: roundMoney(revenueAgg._sum.grandTotal),
+        totalRevenue: roundMoney(Math.max(0, toNum(revenueAgg._sum.grandTotal) - toNum(customerReturnsAgg._sum.totalAmount))),
         totalPurchaseValue: roundMoney(purchaseAgg._sum.grandTotal),
         currentInventoryValue: inventoryValue,
         totalOutstandingDues: roundMoney(dueAgg._sum.pendingAmount),

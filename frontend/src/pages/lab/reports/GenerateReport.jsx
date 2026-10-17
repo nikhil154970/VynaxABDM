@@ -48,15 +48,23 @@ function mergeApiReportDetail(data) {
     overallRemarks: data.notes || null,
     diagnosis: null,
     billNumber: data.billNumber || null,
-    results: (data.results || []).map((r) => ({
-      name: r.testName,
-      value: r.value,
-      unit: r.unit,
-      range: r.referenceRange,
-      category: r.category || null,
-      remarks: r.remarks,
-      fileUrl: r.fileUrl,
+    orderTests: (data.tests || []).map((t) => ({
+      name: t.name,
+      testName: t.name,
+      category: t.category || null,
     })),
+    results: (data.results || [])
+      .filter((r) => String(r?.value ?? '').trim())
+      .filter((r, i, arr) => arr.findIndex((x) => x.testName === r.testName && x.value === r.value) === i)
+      .map((r) => ({
+        name: r.testName,
+        value: r.value,
+        unit: r.unit,
+        range: r.referenceRange,
+        category: r.category || null,
+        remarks: r.remarks,
+        fileUrl: r.fileUrl,
+      })),
     status: 'COMPLETED',
     reportStatus: data.reportStatus,
   };
@@ -69,7 +77,7 @@ function normalizeText(v) {
 function formatDateTime(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function patientKey(o) {
@@ -161,33 +169,24 @@ export default function GenerateReport() {
 
   const patientReports = useMemo(() => {
     if (!selected) return [];
-    const pid = String(selected.patientId || '').trim();
-    const uhid = String(selected.uhid || '').trim();
-    const phone = String(selected.phone || '').trim();
-    const matches = reports.filter((r) => {
-      if (pid && String(r.patientId || '').trim() === pid) return true;
-      if (uhid && String(r.uhid || '').trim() === uhid) return true;
-      if (phone && String(r.phone || '').trim() === phone) return true;
-      return false;
-    });
+    // Match strictly by the same patient identity used for list grouping
+    // (patient-id → UHID → phone → name). This avoids merging different people
+    // who happen to share a mobile number, which showed a false "previous test".
+    const selectedKey = patientKey(selected);
+    const matches = reports.filter((r) => patientKey(r) === selectedKey);
     const base = matches.length ? matches : [selected];
-    return base.map((r) => ({ ...r, ...(detailById[r.id] || {}) }));
+    const unique = base.filter((r, i, arr) => arr.findIndex((x) => x.id === r.id) === i);
+    return unique.map((r) => ({ ...r, ...(detailById[r.id] || {}) }));
   }, [reports, selected, detailById]);
 
   useEffect(() => {
     if (!selected) return;
-    const pid = String(selected.patientId || '').trim();
-    const uhid = String(selected.uhid || '').trim();
-    const phone = String(selected.phone || '').trim();
-    const candidates = reports.filter((r) => {
-      if (pid && String(r.patientId || '').trim() === pid) return true;
-      if (uhid && String(r.uhid || '').trim() === uhid) return true;
-      if (phone && String(r.phone || '').trim() === phone) return true;
-      return String(r.id) === String(selected.id);
-    });
+    const selectedKey = patientKey(selected);
+    const candidates = reports.filter(
+      (r) => patientKey(r) === selectedKey || String(r.id) === String(selected.id),
+    );
     const ids = (candidates.length ? candidates : [selected]).map((r) => r.id).filter(Boolean);
-    const missing = ids.filter((id) => !(detailByIdRef.current[id]?.results?.length));
-    if (missing.length === 0) return () => {};
+    const missing = ids;
 
     let cancelled = false;
     (async () => {
@@ -222,6 +221,12 @@ export default function GenerateReport() {
     const id = String(activeReportId || selected.id || '');
     return patientReports.find((r) => String(r.id) === id) || selected;
   }, [activeReportId, patientReports, selected]);
+
+  /** Reports that actually have printable results (newest first). */
+  const printableReports = useMemo(
+    () => patientReports.filter((r) => buildPrintPagesForReport(r).length),
+    [patientReports],
+  );
 
   const getSelectionSummary = (report) => {
     const categoryRaw = report?.selectedCategoryFilter;
@@ -344,7 +349,7 @@ export default function GenerateReport() {
         <div className="lab-reports-modalOverlay" onMouseDown={() => setSelected(null)}>
           <div className="lab-reports-modal" onMouseDown={(e) => e.stopPropagation()}>
 
-            {/* ══ S.D. PATHOLOGY HEADER — exact image match ══ */}
+            {/* ══ NAITIK HOSPITAL HEADER ══ */}
             <div className="lab-reports-reportHeader">
               {/* Left: navy, logo + name + address */}
               <div className="lab-reports-reportHeader-left">
@@ -352,10 +357,10 @@ export default function GenerateReport() {
                   <img src={REPORT_LOGO_DATA_URI} alt="Logo" />
                 </div>
                 <div className="lab-reports-reportHeader-hospitalInfo">
-                  <div className="lab-reports-reportHeader-hospitalName">S.D. PATHOLOGY</div>
+                  <div className="lab-reports-reportHeader-hospitalName">Naitik Hospital and Surgical Center</div>
                   <div className="lab-reports-reportHeader-hospitalSub">
                     Anand Vihar Colony, Hydel Road, BLW, Varanasi.<br />
-                    Email Id: sdpathology05@gmail.com &nbsp;|&nbsp; Mob.: 7541031287
+                    Mob.: 7541031287
                   </div>
                 </div>
               </div>
@@ -389,42 +394,56 @@ export default function GenerateReport() {
                     <td className="meta-value">: {formatDateOnly(activeReport.reportGeneratedAt || activeReport.date)}</td>
                   </tr>
                   <tr>
-                    <td className="meta-label">Age (Y-M-D)</td>
-                    <td className="meta-value">:{activeReport.age || '—'} Yrs.</td>
+                    <td className="meta-label">UHID</td>
+                    <td className="meta-value">:{activeReport.uhid || '—'}</td>
                     <td className="meta-label">Reported Time</td>
                     <td className="meta-value">: {formatTimeOnly(activeReport.reportGeneratedAt || activeReport.date)}</td>
                   </tr>
                   <tr>
-                    <td className="meta-label">Sex -</td>
-                    <td className="meta-value">:{activeReport.gender || '—'}</td>
+                    <td className="meta-label">Age (Y-M-D)</td>
+                    <td className="meta-value">:{activeReport.age || '—'} Yrs.</td>
                     <td className="meta-label">Given Date</td>
                     <td className="meta-value">: {formatDateOnly(activeReport.sampleCollectionTime || activeReport.date)}</td>
                   </tr>
                   <tr>
-                    <td className="meta-label">Ref by Dr</td>
-                    <td className="meta-value">:{activeReport.doctorName || 'NEW H.T. HOSPITAL'}</td>
+                    <td className="meta-label">Sex -</td>
+                    <td className="meta-value">:{activeReport.gender || '—'}</td>
                     <td className="meta-label">Given Time</td>
                     <td className="meta-value">: {formatTimeOnly(activeReport.sampleCollectionTime || activeReport.date)}</td>
                   </tr>
                   <tr>
-                    <td className="meta-label">Sample Type</td>
-                    <td className="meta-value">:{activeReport.sampleType || 'BLOOD'}</td>
+                    <td className="meta-label">Ref by Dr</td>
+                    <td className="meta-value">:{activeReport.doctorName || 'NAITIK HOSPITAL'}</td>
                     <td className="meta-label">Report No.</td>
                     <td className="meta-value">: {activeReport.orderNumber || activeReport.id || '—'}</td>
+                  </tr>
+                  <tr>
+                    <td className="meta-label">Sample Type</td>
+                    <td className="meta-value">:{activeReport.sampleType || 'BLOOD'}</td>
+                    <td className="meta-label">&nbsp;</td>
+                    <td className="meta-value">&nbsp;</td>
                   </tr>
                 </tbody>
               </table>
 
-              {/* Reports list */}
-              {(patientReports || [])
-                .slice()
-                .sort((a, b) => new Date(b.reportGeneratedAt || b.date).getTime() - new Date(a.reportGeneratedAt || a.date).getTime())
-                .map((r) => {
+              {/* Report — all orders for this patient. New/Previous labels only when
+                  the same UHID has more than one test; a single test shows directly. */}
+              {printableReports.map((r, ri) => {
                   const pages = buildPrintPagesForReport(r);
+                  const isNewest = ri === 0;
+                  const hasHistory = printableReports.length > 1;
                   return (
                     <div key={r.id} style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #e5e7eb' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                        <div className="lab-reports-subSection">{getSelectionSummary(r)}</div>
+                        <div className="lab-reports-subSection">
+                          {hasHistory ? (
+                            <>
+                              {isNewest ? <span style={{ color: '#059669', fontWeight: 900 }}>● NEW TEST</span> : <span style={{ color: '#64748b' }}>● PREVIOUS TEST</span>}
+                              {' '}
+                            </>
+                          ) : null}
+                          {getSelectionSummary(r)}
+                        </div>
                         <div style={{ fontSize: 11, fontWeight: 900, color: '#475569', fontFamily: 'Arial, sans-serif' }}>
                           {r.orderNumber || r.id} · {formatDateTime(r.reportGeneratedAt || r.date)}
                         </div>
@@ -455,9 +474,6 @@ export default function GenerateReport() {
                                 ))}
                               </div>
                               {/* Intro blurb below results — small justified text */}
-                              {bi === page.blocks.length - 1 && page.intro ? (
-                                <p className="lab-reports-introBlurb">{page.intro}</p>
-                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -478,9 +494,9 @@ export default function GenerateReport() {
             <div className="lab-reports-actions">
               <button type="button" onClick={() => handleDownload(activeReport)}>⬇ Download</button>
               <button type="button" onClick={() => handleShare(activeReport)}>↗ Share</button>
-              <button type="button" onClick={() => handlePrint(activeReport)}>🖨 Print Selected</button>
-              {patientReports.length > 1 ? (
-                <button type="button" onClick={() => handlePrintMany(patientReports)}>🖨 Print All</button>
+              <button type="button" onClick={() => handlePrint(printableReports[0] || activeReport)}>🖨 Print Selected</button>
+              {printableReports.length > 1 ? (
+                <button type="button" onClick={() => handlePrintMany(printableReports)}>🖨 Print All</button>
               ) : null}
               <button type="button" onClick={() => navigate('/dashboard/lab/results', { state: { editOrderId: activeReport.id } })}>
                 Edit

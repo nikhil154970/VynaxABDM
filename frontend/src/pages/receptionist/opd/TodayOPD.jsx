@@ -283,14 +283,21 @@ export default function OPDManagement() {
                           >
                             View
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAdmitPatient(p)}
-                            className="px-3 py-1.5 rounded-xl text-xs font-extrabold border border-blue-200 text-blue-800 bg-blue-50 hover:bg-blue-100 transition"
-                            title="Admit Patient (OPD → IPD)"
-                          >
-                            Admit
-                          </button>
+                          {(() => {
+                            const disp = p.consultation?.disposition;
+                            const canAdmit = !disp || disp === 'REFER_ADMIT';
+                            if (!canAdmit) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleAdmitPatient(p)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-extrabold border border-blue-200 text-blue-800 bg-blue-50 hover:bg-blue-100 transition"
+                                title="Admit Patient (OPD → IPD)"
+                              >
+                                Admit
+                              </button>
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>
@@ -469,14 +476,20 @@ export default function OPDManagement() {
                   >
                     <MdLocalPharmacy className="w-4 h-4" /> Send To Pharmacy
                   </button>
-                  <button
-                    type="button"
-                    className="pl-actionBtn"
-                    onClick={() => handleAdmitPatient(selected)}
-                    disabled={!selected}
-                  >
-                    <MdBed className="w-4 h-4" /> Admit Patient
-                  </button>
+                  {(() => {
+                    const disp = selected?.consultation?.disposition;
+                    const canAdmit = !disp || disp === 'REFER_ADMIT';
+                    if (!canAdmit) return null;
+                    return (
+                      <button
+                        type="button"
+                        className="pl-actionBtn"
+                        onClick={() => handleAdmitPatient(selected)}
+                      >
+                        <MdBed className="w-4 h-4" /> Admit Patient
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

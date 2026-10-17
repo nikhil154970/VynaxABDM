@@ -116,8 +116,77 @@ async function updateUserStatus(req, res) {
     if (err && err.code === 'P2025') {
       return res.status(404).json({ message: 'User not found' });
     }
-    throw err;
   }
 }
 
-module.exports = { listUsers, createUser, updateUserStatus };
+async function deleteUser(req, res) {
+  const { id } = req.params;
+  try {
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const currentUserId = req.user?.userId || req.user?.id;
+    if (user.id === currentUserId) {
+      return res.status(403).json({ message: 'You cannot delete your own account' });
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        // Find shift assignments for the user
+        const assignments = await tx.shiftAssignment.findMany({
+          where: { employeeId: id },
+          select: { id: true }
+        });
+        const assignmentIds = assignments.map(a => a.id);
+        if (assignmentIds.length > 0) {
+          await tx.shiftHistory.deleteMany({
+            where: { assignmentId: { in: assignmentIds } }
+          });
+          await tx.shiftAssignment.deleteMany({
+            where: { id: { in: assignmentIds } }
+          });
+        }
+
+        // ShiftHistory where user did the change
+        await tx.shiftHistory.deleteMany({
+          where: { changedById: id }
+        });
+
+        // NurseDuty
+        await tx.nurseDuty.deleteMany({
+          where: { nurseId: id }
+        });
+
+        // AllocationRequest
+        await tx.allocationRequest.deleteMany({
+          where: {
+            OR: [
+              { assignedToId: id },
+              { assignedById: id }
+            ]
+          }
+        });
+
+        // Delete the user
+        await tx.user.delete({ where: { id } });
+      });
+
+      await createActivityLog({ userId: currentUserId, action: 'DELETE_USER', module: 'USER' });
+      return res.json({ ok: true, message: 'User deleted successfully' });
+    } catch (txErr) {
+      console.warn('Delete transaction failed, deactivating instead:', txErr.message || txErr);
+      // Fallback: deactivate the user outside the failed transaction
+      await prisma.user.update({
+        where: { id },
+        data: { isActive: false }
+      });
+      await createActivityLog({ userId: currentUserId, action: 'UPDATE_STATUS', module: 'USER' });
+      return res.json({ ok: true, message: 'User has related records and was deactivated instead.' });
+    }
+  } catch (err) {
+    console.error('deleteUser error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+module.exports = { listUsers, createUser, updateUserStatus, deleteUser };

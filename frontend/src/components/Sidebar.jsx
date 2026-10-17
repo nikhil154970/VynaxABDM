@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from './ConfirmModal';
@@ -12,16 +12,14 @@ import {
   MdAdminPanelSettings, MdMedicalServices, MdScience,
   MdLocalPharmacy, MdBarChart, MdSettings, MdVpnKey,
   MdMonitorHeart, MdAttachMoney, MdGroups, MdWarning,
-  MdMenu, MdClose, MdExitToApp
+  MdMenu, MdClose, MdExitToApp, MdAssignment
 } from 'react-icons/md';
 
 const ROLE_MENUS = {
   super_admin: [
     { label: 'Dashboard', icon: MdDashboard, children: [
       { label: 'Overview', path: '/dashboard/admin' },
-      { label: 'Daily Summary', path: '/dashboard/admin/daily-summary' },
       { label: 'Revenue Snapshot', path: '/dashboard/admin/revenue-snapshot' },
-      { label: 'Bed Occupancy', path: '/dashboard/admin/bed-occupancy' },
     ]},
     { label: 'User & Access', icon: MdVpnKey, children: [
       { label: 'All Users', path: '/dashboard/admin/users' },
@@ -48,8 +46,6 @@ const ROLE_MENUS = {
     { label: 'IPD & Admission', icon: MdBed, children: [
       { label: 'Active Admissions', path: '/dashboard/admin/ipd' },
       // { label: 'Admit Patient', path: '/dashboard/admin/ipd/admit' },
-      { label: 'Transfers History', path: '/dashboard/admin/ipd/transfers' },
-      { label: 'Discharge Overview', path: '/dashboard/admin/ipd/discharge' },
       { label: 'IPD Analytics', path: '/dashboard/admin/ipd/analytics' },
     ]},
     { label: 'Bed & Resource', icon: MdLocalHospital, children: [
@@ -62,27 +58,16 @@ const ROLE_MENUS = {
     ]},
     { label: 'Financial', icon: MdAttachMoney, children: [
       { label: 'All Bills', path: '/dashboard/admin/finance/bills' },
-      { label: 'Generate Bill', path: '/dashboard/admin/finance/bills/generate' },
-      { label: 'Payments', path: '/dashboard/admin/finance/payments' },
-      { label: 'Pending Dues', path: '/dashboard/admin/finance/dues' },
       { label: 'Revenue Analytics', path: '/dashboard/admin/finance/analytics' },
     ]},
-    { label: 'Reports & Analytics', icon: MdBarChart, children: [
-      { label: 'Revenue Reports', path: '/dashboard/admin/reports/revenue' },
-      { label: 'Patient Reports', path: '/dashboard/admin/reports/patients' },
-      { label: 'Doctor Reports', path: '/dashboard/admin/reports/doctors' },
-      { label: 'Bed Utilization', path: '/dashboard/admin/reports/beds' },
-      { label: 'Daily Reports', path: '/dashboard/admin/reports/daily' },
-      { label: 'Monthly Reports', path: '/dashboard/admin/reports/monthly' },
-    ]},
     { label: 'Alerts', icon: MdWarning, children: [
-      { label: 'Pending Actions', path: '/dashboard/admin/alerts/pending' },
       { label: 'Critical Alerts', path: '/dashboard/admin/alerts/critical' },
       { label: 'System Notifications', path: '/dashboard/admin/alerts/system' },
     ]},
     { label: 'System Settings', icon: MdSettings, children: [
       { label: 'Hospital Information', path: '/dashboard/admin/settings/hospital' },
       { label: 'Security Settings', path: '/dashboard/admin/settings/security' },
+      { label: 'ABDM Consents', path: '/dashboard/admin/abdm/consents' },
       { label: 'Profile', path: '/dashboard/admin/settings/profile' },
     ]},
   ],
@@ -95,7 +80,6 @@ const ROLE_MENUS = {
     { label: 'Patients', icon: MdPeople, children: [
       { label: 'Register Patient', path: '/dashboard/reception/patients/register' },
       { label: 'Patient List', path: '/dashboard/reception/patients' },
-      { label: 'Search Patient', path: '/dashboard/reception/patients/search' },
     ]},
     { label: 'Appointments', icon: MdCalendarToday, children: [
       { label: 'Book Appointment', path: '/dashboard/reception/appointments/book' },
@@ -107,13 +91,14 @@ const ROLE_MENUS = {
       { label: 'Consultation History', path: '/dashboard/reception/opd/history' },
     ]},
     { label: 'IPD', icon: MdBed, children: [
-      { label: 'Admit Patient', path: '/dashboard/reception/ipd/admit' },
+      { label: 'Direct IPD Admit', path: '/dashboard/reception/ipd/admit' },
       { label: 'Active Admissions', path: '/dashboard/reception/ipd' },
       { label: 'Transfers', path: '/dashboard/reception/ipd/transfers' },
+      { label: 'Recovery Transfers', path: '/dashboard/reception/ipd/recovery-transfers' },
       { label: 'Transfer History', path: '/dashboard/reception/ipd/transfers/history' },
     ]},
     { label: 'Discharge', icon: MdExitToApp, children: [
-      { label: "Today's Discharge", path: '/dashboard/reception/ipd/today-discharge' },
+      { label: 'Discharge Requests', path: '/dashboard/reception/ipd/today-discharge' },
       { label: 'Discharge History', path: '/dashboard/reception/ipd/discharge/history' },
     ]},
     { label: 'Bed Management', icon: MdLocalHospital, children: [
@@ -130,8 +115,13 @@ const ROLE_MENUS = {
       { label: 'Create new bill', path: '/dashboard/reception/lab/create-bill' },
       { label: 'All lab billing', path: '/dashboard/reception/lab/bills' },
       { label: 'Pending payment', path: '/dashboard/reception/lab/pending-payment' },
-      { label: 'Advised OPD tests', path: '/dashboard/reception/lab/advised' },
+      { label: 'Advised Lab Tests', path: '/dashboard/reception/lab/advised' },
       { label: 'Lab reports', path: '/dashboard/reception/lab/reports' },
+    ]},
+    { label: 'OT Requests', icon: MdMedicalServices, children: [
+      { label: 'All OT Requests', path: '/dashboard/reception/ot-requests' },
+      { label: 'Generate OT Bill', path: '/dashboard/reception/ot-requests/generate-bill' },
+      { label: 'Approved For OT', path: '/dashboard/reception/ot-requests/approved' },
     ]},
     { label: 'Notifications', icon: MdNotifications, children: [
       { label: 'Pending Actions', path: '/dashboard/reception/notifications/pending' },
@@ -144,8 +134,7 @@ const ROLE_MENUS = {
 
   doctor: [
     { label: 'Dashboard', icon: MdDashboard, children: [
-      { label: 'Overview', path: '/dashboard/doctor' },
-      { label: 'Today Summary', path: '/dashboard/doctor/summary' },
+      { label: 'Dashboard', path: '/dashboard/doctor' },
     ]},
     { label: 'Appointments', icon: MdCalendarToday, children: [
       { label: 'Today Appointments', path: '/dashboard/doctor/appointments/today' },
@@ -163,6 +152,10 @@ const ROLE_MENUS = {
     //   { label: 'Create Request', path: '/dashboard/doctor/lab/request' },
     //   { label: 'View Reports', path: '/dashboard/doctor/lab/reports' },
     // ]},
+    { label: 'OT Schedule', icon: MdLocalHospital, children: [
+      { label: 'My OT Schedule', path: '/dashboard/doctor/ot/schedule' },
+      { label: 'All OT Recovery', path: '/dashboard/doctor/ot/recovery' },
+    ]},
     { label: 'Patient History', icon: MdMonitorHeart, children: [
       { label: 'Search Patient', path: '/dashboard/doctor/history/search' },
       { label: 'Full Medical History', path: '/dashboard/doctor/history' },
@@ -182,6 +175,16 @@ const ROLE_MENUS = {
       { label: 'Assigned Patients', path: '/dashboard/nurse/ipd' },
       { label: 'Update Patients record', path: '/dashboard/nurse/ipd/details' },
       { label: 'Discharge Approval', path: '/dashboard/nurse/ipd/discharge-approval' },
+    ]},
+    { label: 'OT Request', icon: MdMedicalServices, children: [
+      { label: 'Pre Assessment', path: '/dashboard/nurse/pre-assessment' },
+      { label: 'OT Request Status', path: '/dashboard/nurse/ot-requests' },
+    ]},
+    { label: 'OT Patient', icon: MdMonitorHeart, children: [
+      { label: 'Assigned Patients', path: '/dashboard/nurse/ot-patients' },
+    ]},
+    { label: 'Duty Schedule', icon: MdAssignment, children: [
+      { label: 'My Schedule', path: '/dashboard/nurse/duty-schedule' },
     ]},
     { label: 'Nursing Notes', icon: MdReceiptLong, children: [
       { label: 'Add Notes', path: '/dashboard/nurse/notes/add' },
@@ -220,41 +223,83 @@ const ROLE_MENUS = {
     { label: 'Dashboard', icon: MdDashboard, children: [
       { label: 'Overview', path: '/dashboard/hr' },
     ]},
-    { label: 'Staff', icon: MdGroups, children: [
-      { label: 'All Staff', path: '/dashboard/hr/staff' },
-      { label: 'Add Staff', path: '/dashboard/hr/staff/add' },
+    { label: 'Employee Management', icon: MdGroups, children: [
+      { label: 'All Employees', path: '/dashboard/hr/employees' },
+      { label: 'Departments', path: '/dashboard/hr/employees/departments' },
     ]},
-    { label: 'Attendance', icon: MdCalendarToday, children: [
-      { label: 'Today Attendance', path: '/dashboard/hr/attendance' },
-      { label: 'Attendance Report', path: '/dashboard/hr/attendance/report' },
+    { label: 'Staff Allocation', icon: MdMedicalServices, children: [
+      { label: 'Allocation Requests', path: '/dashboard/hr/staff-allocation/requests' },
+      { label: 'Nurse Allocation', path: '/dashboard/hr/staff-allocation/nurse' },
+      { label: 'Patient Staff Allocation', path: '/dashboard/hr/staff-allocation/patient' },
     ]},
-    { label: 'Payroll', icon: MdAttachMoney, children: [
-      { label: 'Process Payroll', path: '/dashboard/hr/payroll' },
-      { label: 'Payroll History', path: '/dashboard/hr/payroll/history' },
+    { label: 'Shift Management', icon: MdCalendarToday, children: [
+      { label: 'Shifts', path: '/dashboard/hr/shifts' },
+      { label: 'Staff Availability', path: '/dashboard/hr/shifts/availability' },
+      { label: 'Duty Roster', path: '/dashboard/hr/duty-roster' },
     ]},
-    { label: 'Profile', icon: MdPerson, children: [
-      { label: 'My Profile', path: '/dashboard/hr/profile' },
+    { label: 'Reports', icon: MdBarChart, children: [
+      { label: 'View Reports', path: '/dashboard/hr/reports' },
+    ]},
+    { label: 'Notifications', icon: MdNotifications, children: [
+      { label: 'Alerts', path: '/dashboard/hr/notifications' },
+    ]},
+  ],
+
+  ot_technician: [
+    { label: 'Dashboard', icon: MdDashboard, children: [
+      { label: 'Overview', path: '/dashboard/ot' },
+    ]},
+    { label: 'OT Operations', icon: MdMedicalServices, children: [
+      { label: 'OT Requests', path: '/dashboard/ot/requests' },
+      { label: "Today's Surgeries", path: '/dashboard/ot/today' },
+      { label: 'Upcoming Surgeries', path: '/dashboard/ot/upcoming' },
+      { label: 'Delayed Surgeries', path: '/dashboard/ot/delayed' },
+    ]},
+    { label: 'Surgery Management', icon: MdLocalHospital, children: [
+      { label: 'Surgery Scheduling', path: '/dashboard/ot/surgery/schedule' },
+      { label: 'In Progress Surgeries', path: '/dashboard/ot/surgery/in-progress' },
+      { label: 'Recovery Room', path: '/dashboard/ot/recovery' },
+      { label: 'Post-Surgery Notes', path: '/dashboard/ot/post-surgery' },
+      { label: 'Completed Surgeries', path: '/dashboard/ot/surgery/completed' },
+    ]},
+    { label: 'Resource Management', icon: MdSettings, children: [
+      { label: 'OT Rooms', path: '/dashboard/ot/rooms' },
+      { label: 'Equipment Allocation', path: '/dashboard/ot/equipment' },
+      { label: 'Medicine Tracking', path: '/dashboard/ot/medicine' },
+    ]},
+    { label: 'Reports & Analytics', icon: MdBarChart, children: [
+      { label: 'Surgery Reports', path: '/dashboard/ot/reports/surgery' },
+      { label: 'OT Utilization Report', path: '/dashboard/ot/reports/utilization' },
+    ]},
+    { label: 'System', icon: MdNotifications, children: [
+      { label: 'Notifications', path: '/dashboard/ot/notifications' },
+      { label: 'Activity Logs', path: '/dashboard/ot/logs' },
     ]},
   ],
 };
 
 // ─── MenuItem ─────────────────────────────────────────────────────────────────
-function MenuItem({ item, collapsed, variant = 'default', onNavClick, notificationCount = 0 }) {
-  const location = useLocation();
+function MenuItem({ item, collapsed, setCollapsed, onNavClick, moduleCount = 0, forceActive = false }) {
   const navigate = useNavigate();
   const Icon = item.icon;
 
-  const isActive = item.children.some(c => location.pathname.startsWith(c.path));
-  const [open, setOpen] = useState(isActive);
-  const isDoctor = variant === 'doctor';
+  const [open, setOpen] = useState(forceActive);
 
   const handleClick = () => {
+    if (collapsed && setCollapsed) {
+      setCollapsed(false);
+      setOpen(true);
+    }
     if (item.children.length === 1) {
       startNavigationLoading();
       navigate(item.children[0].path);
       onNavClick?.();
     } else {
-      setOpen(o => !o);
+      if (!collapsed) {
+        setOpen(o => !o);
+      } else {
+        setOpen(true);
+      }
     }
   };
 
@@ -262,30 +307,25 @@ function MenuItem({ item, collapsed, variant = 'default', onNavClick, notificati
     <div>
       <button
         onClick={handleClick}
-        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group ${
-          isDoctor ? 'hover:bg-white/10' : ''
-        }`}
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group hover:bg-[rgba(0,180,216,0.15)]"
         style={{
-          background: isDoctor
-            ? (isActive ? 'rgba(0, 174, 239, 0.22)' : 'transparent')
-            : undefined,
-          color: isDoctor ? '#FFFFFF' : undefined,
+          background: forceActive ? '#0077B6' : 'transparent',
+          color: '#FFFFFF',
         }}
       >
         <Icon
-          className={`w-5 h-5 shrink-0 ${isDoctor ? '' : (isActive ? 'text-white' : 'text-blue-300 group-hover:text-white')}`}
-          style={isDoctor ? { color: isActive ? '#00AEEF' : 'rgba(255,255,255,0.80)' } : undefined}
+          className="w-5 h-5 shrink-0"
+          style={{ color: forceActive ? '#FFFFFF' : '#90E0EF' }}
         />
         {!collapsed && (
           <>
             <span className="flex-1 text-left truncate">{item.label}</span>
-            {item.label === 'Notifications' && notificationCount > 0 ? (
+            {moduleCount > 0 ? (
               <span
                 className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
                 style={{ background: '#ef4444', color: '#fff' }}
-                title={`${notificationCount} unread`}
               >
-                +{notificationCount}
+                {moduleCount > 99 ? '99+' : moduleCount}
               </span>
             ) : null}
             {item.children.length > 1 && (
@@ -298,7 +338,7 @@ function MenuItem({ item, collapsed, variant = 'default', onNavClick, notificati
       {open && !collapsed && item.children.length > 1 && (
         <div
           className="ml-4 mt-0.5 mb-1 pl-3 space-y-0.5 border-l"
-          style={{ borderColor: isDoctor ? 'rgba(255,255,255,0.18)' : undefined }}
+          style={{ borderColor: 'rgba(255,255,255,0.1)' }}
         >
           {item.children.map((child) => (
             <NavLink
@@ -309,23 +349,12 @@ function MenuItem({ item, collapsed, variant = 'default', onNavClick, notificati
                 startNavigationLoading();
                 onNavClick?.();
               }}
-              className={({ isActive }) =>
-                `block px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
-                  isDoctor
-                    ? 'hover:bg-white/10'
-                    : (isActive
-                      ? 'bg-blue-500/20 text-white font-semibold ring-1 ring-white/15'
-                      : 'text-blue-200 hover:bg-blue-700/25 hover:text-white')
-                }`
-              }
-              style={({ isActive }) =>
-                isDoctor
-                  ? ({
-                      background: isActive ? '#00AEEF' : 'transparent',
-                      color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.82)',
-                    })
-                  : undefined
-              }
+              className="block px-3 py-1.5 rounded-lg text-xs font-medium truncate transition-all duration-150 hover:bg-[rgba(0,180,216,0.15)]"
+              title={child.label}
+              style={({ isActive }) => ({
+                background: isActive ? '#0077B6' : 'transparent',
+                color: '#FFFFFF',
+              })}
             >
               {child.label}
             </NavLink>
@@ -337,26 +366,69 @@ function MenuItem({ item, collapsed, variant = 'default', onNavClick, notificati
 }
 
 // ─── Shared inner content ─────────────────────────────────────────────────────
-function SidebarInner({ collapsed, setCollapsed, menuItems, onNavClick, onLogout, notificationCount }) {
+function SidebarInner({ collapsed, setCollapsed, menuItems, onNavClick, onLogout, moduleCounts = {} }) {
+  const location = useLocation();
+
+  const [dismissed, setDismissed] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('sidebarDismissed') || '{}'); } catch { return {}; }
+  });
+
+  const saveDismissed = (next) => {
+    setDismissed(next);
+    try { sessionStorage.setItem('sidebarDismissed', JSON.stringify(next)); } catch {}
+  };
+
+  // Find the menu item whose child path matches the longest (most specific)
+  const activeLabel = useMemo(() => {
+    let best = null;
+    let bestLen = 0;
+    for (const group of menuItems) {
+      for (const child of group.children) {
+        if (location.pathname.startsWith(child.path) && child.path.length > bestLen) {
+          best = group.label;
+          bestLen = child.path.length;
+        }
+      }
+    }
+    return best;
+  }, [menuItems, location.pathname]);
+
+  // Auto-dismiss badge for the group matching the current path
+  useEffect(() => {
+    const matched = menuItems.find(g =>
+      g.children.some(c => location.pathname.startsWith(c.path))
+    );
+    if (matched) {
+      const next = { ...dismissed, [matched.label]: true };
+      saveDismissed(next);
+    }
+  }, [location.pathname]);
+
+  const getNetCount = (label) => {
+    const raw = moduleCounts[label] || 0;
+    if (dismissed[label]) return 0;
+    return raw;
+  };
+
   return (
     <>
-      {/* Logo */}
+      {/* Logo & Toggle */}
       <div
-        className="flex items-center gap-3 px-4 py-4 border-b"
-        style={{ borderColor: 'rgba(255,255,255,0.14)' }}
+        className={`flex ${collapsed ? 'flex-col items-center px-2' : 'items-center px-4'} gap-3 py-4 border-b`}
+        style={{ borderColor: 'rgba(255,255,255,0.1)' }}
       >
         <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg bg-white">
           <img
-            src="/hopital_logo.png"
-            alt="New H T Hospital"
+            src="/mqe_logo.png"
+            alt="VyanX"
             className="w-7 h-7 object-contain"
             draggable={false}
           />
         </div>
         {!collapsed && (
           <div className="flex-1 overflow-hidden">
-            <p className="text-sm font-bold text-white truncate">New H T Hospital</p>
-            <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.70)' }}>HIMS</p>
+            <p className="text-sm font-bold text-white truncate">VyanX</p>
+            <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.70)' }}>VyanX Hospital Management System</p>
           </div>
         )}
 
@@ -390,9 +462,10 @@ function SidebarInner({ collapsed, setCollapsed, menuItems, onNavClick, onLogout
             key={item.label}
             item={item}
             collapsed={collapsed}
-            variant="doctor"
+            setCollapsed={setCollapsed}
             onNavClick={onNavClick}
-            notificationCount={notificationCount}
+            moduleCount={getNetCount(item.label)}
+            forceActive={item.label === activeLabel}
           />
         ))}
       </nav>
@@ -428,54 +501,52 @@ export default function Sidebar({ collapsed, setCollapsed }) {
   const menuItems = ROLE_MENUS[normalizedRole] || [];
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(0);
+  const [moduleCounts, setModuleCounts] = useState({});
+
+  // ✅ only update if values actually changed — prevents cascading re-renders on every 60s poll
+  const setModuleCountsIfChanged = useCallback((next) => {
+    setModuleCounts((prev) => {
+      const k = Object.keys({ ...prev, ...next });
+      return k.some((key) => prev[key] !== next[key]) ? next : prev;
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;
 
-    const loadReceptionUnread = async () => {
+    const loadCounts = async () => {
       try {
-        const res = await api.get('/receptionist/notifications', { params: { unread: 1, limit: 100 } });
-        const rows = Array.isArray(res.data?.notifications) ? res.data.notifications : [];
-        if (active) setNotificationCount(rows.length);
+        if (normalizedRole === 'receptionist') {
+          const [notifRes, moduleRes] = await Promise.all([
+            api.get('/receptionist/notifications', { params: { unread: 1, limit: 100 }, silent: true }),
+            api.get('/receptionist/notifications/module-counts', { silent: true }),
+          ]);
+          if (!active) return;
+          const notifRows = Array.isArray(notifRes.data?.notifications) ? notifRes.data.notifications : [];
+          const mc = moduleRes.data || {};
+          setModuleCountsIfChanged({
+            'OT Requests': mc.otPendingBill || 0,
+            'Lab Billing': (mc.pendingLabPayments || 0) + (mc.advisedLabTests || 0),
+            'Billing': mc.pendingBills || 0,
+            'IPD': mc.activeIpd || 0,
+            'Discharge': mc.pendingDischarge || 0,
+            'Notifications': notifRows.length,
+          });
+        } else if (normalizedRole === 'lab_technician' || (normalizedRole === 'super_admin' && location.pathname.startsWith('/dashboard/lab'))) {
+          const res = await api.get('/lab/notifications', { params: { unread: 1, limit: 100 }, silent: true });
+          if (!active) return;
+          const rows = Array.isArray(res.data?.notifications) ? res.data.notifications : [];
+          setModuleCountsIfChanged({ 'Notifications': rows.length });
+        } else {
+          setModuleCountsIfChanged({});
+        }
       } catch {
-        if (active) setNotificationCount(0);
+        if (active) setModuleCountsIfChanged({});
       }
     };
 
-    const loadLabUnread = async () => {
-      try {
-        const res = await api.get('/lab/notifications', { params: { unread: 1, limit: 100 } });
-        const rows = Array.isArray(res.data?.notifications) ? res.data.notifications : [];
-        if (active) setNotificationCount(rows.length);
-      } catch {
-        if (active) setNotificationCount(0);
-      }
-    };
-
-    if (normalizedRole === 'receptionist') {
-      loadReceptionUnread();
-      return () => {
-        active = false;
-      };
-    }
-
-    const showLabBadge =
-      normalizedRole === 'lab_technician' ||
-      (normalizedRole === 'super_admin' && location.pathname.startsWith('/dashboard/lab'));
-
-    if (showLabBadge) {
-      loadLabUnread();
-      return () => {
-        active = false;
-      };
-    }
-
-    setNotificationCount(0);
-    return () => {
-      active = false;
-    };
-  }, [normalizedRole, location.pathname]);
+    loadCounts();
+  }, [normalizedRole, location.pathname, setModuleCountsIfChanged]);
 
   const handleLogout = () => setConfirmOpen(true);
   const closeMobile = () => setMobileOpen(false);
@@ -486,7 +557,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
       <button
         onClick={() => setMobileOpen(true)}
         className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-xl shadow-lg"
-        style={{ background: '#2D2A6E', color: '#fff' }}
+        style={{ background: '#001B48', color: '#fff' }}
         aria-label="Open menu"
       >
         <MdMenu className="w-6 h-6" />
@@ -505,7 +576,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
         className="md:hidden fixed top-0 left-0 z-50 h-full flex flex-col shadow-2xl transition-transform duration-300 ease-in-out"
         style={{
           width: '256px',
-          background: '#2D2A6E',
+          background: '#001B48',
           borderRight: '1px solid rgba(255,255,255,0.14)',
           transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
         }}
@@ -516,7 +587,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           menuItems={menuItems}
           onNavClick={closeMobile}
           onLogout={handleLogout}
-          notificationCount={notificationCount}
+          moduleCounts={moduleCounts}
         />
       </aside>
 
@@ -526,7 +597,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
         style={{
           width: collapsed ? '70px' : '256px',
           minWidth: collapsed ? '70px' : '256px',
-          background: '#2D2A6E',
+          background: '#001B48',
           borderRight: '1px solid rgba(255,255,255,0.14)',
         }}
       >
@@ -536,7 +607,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           menuItems={menuItems}
           onNavClick={null}
           onLogout={handleLogout}
-          notificationCount={notificationCount}
+          moduleCounts={moduleCounts}
         />
       </aside>
 

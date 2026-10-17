@@ -68,7 +68,7 @@ export default function PatientLabReportsPanel({
           ? 'w-full'
           : 'w-full rounded-2xl border p-4 sm:p-5'
       }
-      style={embedded ? undefined : { background: '#FFFFFF', borderColor: 'rgba(0,0,0,0.06)' }}
+      style={embedded ? undefined : { background: '#FFFFFF', borderColor: '#e0e7ff' }}
     >
       <div
         className={`flex items-center gap-2 flex-wrap mb-3 ${embedded ? 'justify-end' : 'justify-between'}`}

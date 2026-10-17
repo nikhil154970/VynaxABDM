@@ -24,10 +24,16 @@ const {
   listLabRequests,
   getLabOrderDetail,
   submitLabResults,
+  createRepeatLabOrder,
   collectLabRequest,
   startLabRequest,
   getLabReportByRequestId,
   postLabReports,
+  listCustomParams,
+  createCustomParam,
+  deleteCustomParam,
+  listNurseLabAdvice,
+  createNurseLabAdvice,
 } = require('./lab.controller');
 const labNotificationsRoutes = require('./notifications/notifications.routes');
 
@@ -39,7 +45,7 @@ router.use('/notifications', labNotificationsRoutes);
 router.get(
   '/catalog',
   authMiddleware,
-  roleMiddleware(['DOCTOR', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'SUPER_ADMIN']),
+  roleMiddleware(['DOCTOR', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'NURSE', 'SUPER_ADMIN']),
   [query('q').optional().isString(), query('category').optional().isString()],
   validateRequest,
   listCatalog,
@@ -48,7 +54,7 @@ router.get(
 router.get(
   '/tests',
   authMiddleware,
-  roleMiddleware(['DOCTOR', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'SUPER_ADMIN']),
+  roleMiddleware(['DOCTOR', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'NURSE', 'SUPER_ADMIN']),
   [
     query('admin').optional().isString(),
     query('forBilling').optional().isString(),
@@ -58,13 +64,37 @@ router.get(
   listTestsSimple,
 );
 
+// ─── Nurse IPD lab advice ───
+router.get(
+  '/advice/nurse/:admissionId',
+  authMiddleware,
+  roleMiddleware(['NURSE', 'SUPER_ADMIN']),
+  [param('admissionId').isUUID().withMessage('Valid admission id is required')],
+  validateRequest,
+  listNurseLabAdvice,
+);
+
+router.post(
+  '/advice/nurse',
+  authMiddleware,
+  roleMiddleware(['NURSE', 'SUPER_ADMIN']),
+  [
+    body('admissionId').isUUID().withMessage('admissionId must be a valid uuid'),
+    body('testIds').isArray({ min: 1 }).withMessage('Select at least one test'),
+    body('testIds.*').isInt({ min: 1 }).withMessage('Invalid test id'),
+    body('clinicalNote').optional().isString(),
+  ],
+  validateRequest,
+  createNurseLabAdvice,
+);
+
 router.post(
   '/tests',
   authMiddleware,
   roleMiddleware(['SUPER_ADMIN']),
   [
     body('name').isString().trim().isLength({ min: 1 }),
-    body('category').isString().trim().isLength({ min: 1 }),
+    body('category').optional({ values: 'null' }).isString().trim(),
     body('price').isFloat({ min: 0 }),
     body('isActive').optional().isBoolean(),
   ],
@@ -137,6 +167,8 @@ router.get(
   '/advice/pending',
   authMiddleware,
   roleMiddleware(['RECEPTIONIST', 'SUPER_ADMIN']),
+  [query('uhid').optional().isString()],
+  validateRequest,
   listPendingTestAdvice,
 );
 
@@ -289,6 +321,15 @@ router.get(
 );
 
 router.post(
+  '/orders/:id/repeat',
+  authMiddleware,
+  roleMiddleware(['LAB_TECHNICIAN', 'SUPER_ADMIN']),
+  [param('id').isUUID().withMessage('Valid order id required')],
+  validateRequest,
+  createRepeatLabOrder,
+);
+
+router.post(
   '/orders/:id/results',
   authMiddleware,
   roleMiddleware(['LAB_TECHNICIAN', 'SUPER_ADMIN']),
@@ -310,6 +351,11 @@ router.post(
   validateRequest,
   submitLabResults,
 );
+
+// Custom test parameters (lab technician can manage)
+router.get('/custom-params', authMiddleware, roleMiddleware(['LAB_TECHNICIAN', 'SUPER_ADMIN']), listCustomParams);
+router.post('/custom-params', authMiddleware, roleMiddleware(['LAB_TECHNICIAN', 'SUPER_ADMIN']), body('department').notEmpty(), body('testName').notEmpty(), body('parameter').notEmpty(), validateRequest, createCustomParam);
+router.delete('/custom-params/:id', authMiddleware, roleMiddleware(['LAB_TECHNICIAN', 'SUPER_ADMIN']), deleteCustomParam);
 
 module.exports = router;
 

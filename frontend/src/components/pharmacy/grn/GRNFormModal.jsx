@@ -579,7 +579,7 @@ export default function GRNFormModal({ open, mode, grn, saving, onClose, onSubmi
           </div>
         </div>
 
-        <div className="relative z-10 flex shrink-0 flex-wrap gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+        <div className="relative z-10 flex shrink-0 flex-wrap gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
           <button
             type="button"
             onClick={onClose}

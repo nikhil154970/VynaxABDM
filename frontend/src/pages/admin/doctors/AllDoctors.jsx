@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MdLocalHospital, MdAdd } from 'react-icons/md';
 import api from '../../../utils/api';
 import Pagination from '../../../components/Pagination';
 import DoctorTable from '../../../components/DoctorTable';
@@ -45,25 +46,33 @@ export default function AllDoctors() {
   };
 
   return (
-    <div className="p-6 sm:p-8 bg-[#F5F7FA] min-h-full">
+    <div className="p-6 space-y-6">
       <Toast type={toast.type} message={toast.message} onClose={() => setToast((t) => ({ ...t, message: '' }))} />
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-extrabold text-gray-900">All Doctors</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage doctors, status, and availability for bookings.</p>
+      <div className="max-w-[1600px] mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-[#0077B6] shadow-sm shrink-0">
+              <MdLocalHospital className="w-6 h-6" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">All Doctors</h1>
+              <p className="text-xs md:text-sm text-gray-500">
+                Manage doctors list, status, and availability for hospital bookings.
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={() => navigate('/dashboard/admin/doctors/add')}
-            className="px-4 py-2.5 rounded-2xl text-sm font-extrabold bg-[#E53935] text-white hover:bg-[#d6322f] transition shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#0077B6] text-white hover:bg-[#005f92] active:bg-[#001B48] transition duration-200 cursor-pointer shadow-sm shrink-0"
           >
+            <MdAdd className="w-5 h-5" />
             Add Doctor
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 bg-rose-50 text-rose-700 text-sm rounded-2xl ring-1 ring-rose-100 px-4 py-3">
+          <div className="bg-rose-50 text-rose-800 text-sm rounded-2xl border border-rose-100 px-4 py-3 font-semibold">
             {error}
           </div>
         )}

@@ -83,12 +83,12 @@
 
 .notifications-card-critical {
   border-left-color: rgba(229, 57, 53, 0.80);
-  background: linear-gradient(135deg, rgba(229, 57, 53, 0.06), rgba(255, 255, 255, 1));
+  background: rgba(229, 57, 53, 0.06);
 }
 
 .notifications-card-medicine {
   border-left-color: rgba(245, 158, 11, 0.85);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(255, 255, 255, 1));
+  background: rgba(245, 158, 11, 0.08);
 }
 
 .notifications-card-info {
@@ -343,4 +343,7 @@
     font-size: 10px;
   }
 }
+
+
+
 

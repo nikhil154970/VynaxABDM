@@ -80,7 +80,10 @@ function buildHistoryWhere({
   dateTo,
 } = {}) {
   const where = {
-    NOT: { status: 'DRAFT' },
+    NOT: [
+      { status: 'DRAFT' },
+      { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
+    ],
   };
 
   if (q) {

@@ -1,3 +1,21 @@
+.rp-registerForm {
+  width: 100%;
+  max-width: none;
+  padding: 24px clamp(16px, 2vw, 32px) 28px;
+}
+
+.rp-registerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  width: 100%;
+}
+
+.rp-mainColumn,
+.rp-sideColumn {
+  min-width: 0;
+}
+
 .rp-iconBtn {
   display: inline-flex;
   align-items: center;
@@ -23,26 +41,38 @@
   padding: 8px 10px;
   border-radius: 999px;
   border: 1px solid rgba(15, 45, 94, 0.12);
-  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.04));
+  background: #f8faff;
   color: #0f2d5e;
   font-size: 12px;
   font-weight: 700;
 }
 
+.rp-pillAbhaVerified {
+  border-color: #86efac;
+  background: #ecfdf5;
+  color: #15803d;
+}
+
+.rp-pillHipLinked {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
 .rp-card {
   background: #ffffff;
   border: 1px solid rgba(15, 45, 94, 0.08);
-  border-radius: 18px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  border-radius: 20px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
   overflow: hidden;
 }
 .rp-cardCompact .rp-cardBody {
   padding: 18px;
 }
 .rp-cardHeader {
-  padding: 16px 18px;
+  padding: 18px 20px;
   border-bottom: 1px solid rgba(15, 45, 94, 0.08);
-  background: linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.03));
+  background: #f8faff;
 }
 .rp-cardTitle {
   display: flex;
@@ -72,7 +102,7 @@
   color: #64748b;
 }
 .rp-cardBody {
-  padding: 20px;
+  padding: 22px 20px;
 }
 
 .rp-field {
@@ -103,7 +133,8 @@
 
 .rp-input {
   width: 100%;
-  padding: 10px 12px;
+  min-height: 44px;
+  padding: 10px 13px;
   font-size: 13px;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.55);
@@ -122,7 +153,7 @@
   cursor: not-allowed;
 }
 .rp-inputReadOnly {
-  background: linear-gradient(135deg, rgba(15, 45, 94, 0.05), rgba(26, 74, 138, 0.03));
+  background: #f8faff;
   border-color: rgba(15, 45, 94, 0.12);
   color: #0f2d5e;
   font-weight: 800;
@@ -136,7 +167,7 @@
 .rp-kpi {
   border-radius: 16px;
   border: 1px solid rgba(15, 45, 94, 0.1);
-  background: linear-gradient(180deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.03));
+  background: #f8faff;
   padding: 12px;
 }
 .rp-kpiLabel {
@@ -172,7 +203,7 @@
   font-weight: 900;
   color: #ffffff;
   border: 1px solid rgba(15, 45, 94, 0.35);
-  background: linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 55%, #1d4ed8 100%);
+  background: #001B48;
   box-shadow: 0 10px 26px rgba(15, 45, 94, 0.22);
   transition: 150ms ease;
   flex: 1;
@@ -228,7 +259,7 @@
   border-radius: 18px;
   padding: 16px;
   border: 1px solid rgba(15, 45, 94, 0.25);
-  background: linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 55%, #1d4ed8 100%);
+  background: #001B48;
   box-shadow: 0 16px 42px rgba(15, 45, 94, 0.26);
 }
 .rp-successIcon {
@@ -275,6 +306,14 @@
 }
 
 @media (max-width: 768px) {
+  .rp-registerForm {
+    padding: 16px 14px 24px;
+  }
+  .rp-cardHeader,
+  .rp-cardBody {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
   .rp-successCard {
     flex-direction: column;
   }
@@ -288,4 +327,5 @@
     min-width: 100%;
   }
 }
+
 

@@ -189,14 +189,16 @@
   background: #ffffff;
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 16px;
-  overflow: hidden;
+  overflow-x: auto;
   box-shadow: 0 6px 18px -14px rgba(15, 23, 42, 0.35);
 }
 
 .assigned-patients-table {
   width: 100%;
+  min-width: 980px;
   border-collapse: collapse;
   font-size: 13px;
+  table-layout: fixed;
 }
 
 .assigned-patients-table thead th {
@@ -213,7 +215,66 @@
   padding: 12px 14px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   color: rgba(15, 23, 42, 0.82);
-  vertical-align: middle;
+  vertical-align: top;
+  overflow: hidden;
+}
+
+.assigned-patients-col-name { width: 11%; }
+.assigned-patients-col-uhid { width: 11%; }
+.assigned-patients-col-ward { width: 14%; }
+.assigned-patients-col-bed { width: 8%; }
+.assigned-patients-col-doctor { width: 10%; }
+.assigned-patients-col-date { width: 10%; }
+.assigned-patients-col-status { width: 13%; }
+.assigned-patients-actions-simple {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.assigned-patients-actions-simple .assigned-patients-btn {
+  width: auto;
+  min-width: 108px;
+  flex: 0 0 auto;
+}
+
+.assigned-patients-actions-loading-inline {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.assigned-patients-col-actions { width: 18%; }
+
+.assigned-patients-td-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assigned-patients-status-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.assigned-patients-badge-ot {
+  background: rgba(29, 78, 216, 0.08);
+  color: #1d4ed8;
+  border-color: rgba(29, 78, 216, 0.22);
+  font-size: 11px;
+  padding: 5px 9px;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: left;
+  max-width: 100%;
 }
 
 .assigned-patients-table tbody tr:hover td {
@@ -275,15 +336,52 @@
   text-align: right;
 }
 
+.assigned-patients-actions-cell {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
 .assigned-patients-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  justify-items: stretch;
 }
 
 .assigned-patients-actions .assigned-patients-btn {
-  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.assigned-patients-actions .assigned-patients-btn-action-wide {
+  grid-column: 1 / -1;
+}
+
+.assigned-patients-btn-ot {
+  border-color: rgba(29, 78, 216, 0.35);
+  background: rgba(29, 78, 216, 0.12);
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.assigned-patients-actions-loading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  color: #6b7280;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .assigned-patients-btn {
@@ -809,23 +907,21 @@
     min-width: 600px; /* scroll instead of breaking */
   }
 
-  /* Buttons wrap */
+  /* Buttons — keep 2-col grid on mobile */
   .assigned-patients-actions {
-    justify-content: flex-start;
-  }
-
-  /* Keep actions buttons in one row on mobile */
-  .assigned-patients-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
-    flex-wrap: nowrap;
   }
 
   .assigned-patients-actions .assigned-patients-btn {
     height: 32px;
-    padding: 0 10px;
+    padding: 0 8px;
     font-size: 11px;
     border-radius: 10px;
-    white-space: nowrap;
+  }
+
+  .assigned-patients-table {
+    min-width: 880px;
   }
 
 }

@@ -218,7 +218,7 @@ export default function SendToPharmacyModal({ open, onClose, context, prefillIte
                     </thead>
                     <tbody>
                       {sendItems.map((it) => (
-                        <tr key={it.key} className="border-t" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
+                        <tr key={it.key} className="border-t" style={{ borderColor: '#e0e7ff' }}>
                           <td className="py-2 pr-2 font-semibold text-gray-900">{it.medicineName}</td>
                           <td className="py-2 pr-2">
                             <input

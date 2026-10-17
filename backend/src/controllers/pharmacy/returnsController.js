@@ -294,6 +294,7 @@ const createCustomerReturn = async (req, res) => {
       }
 
       const sellingPrice = toNum(billItem.sellingPrice);
+      const unitPaidAmount = toNum(billItem.amount) / billItem.quantity;
       resolvedItems.push({
         medicineId: billItem.medicineId,
         inventoryBatchId: billItem.inventoryBatchId,
@@ -303,7 +304,7 @@ const createCustomerReturn = async (req, res) => {
         quantity: returnQty,
         purchasePrice: toNum(billItem.mrp),
         sellingPrice,
-        amount: roundMoney(returnQty * sellingPrice),
+        amount: roundMoney(returnQty * unitPaidAmount),
         reason: String(line.reason || body.reason || '').trim() || null,
       });
     }
@@ -405,6 +406,8 @@ const createVendorReturn = async (req, res) => {
       }
 
       const purchasePrice = toNum(batch.purchasePrice);
+      const gst = Number(batch.gstPercentage) || 0;
+      const amount = returnQty * purchasePrice * (1 + gst / 100);
       resolvedItems.push({
         medicineId: batch.medicineId,
         inventoryBatchId: batch.id,
@@ -414,7 +417,7 @@ const createVendorReturn = async (req, res) => {
         quantity: returnQty,
         purchasePrice,
         sellingPrice: toNum(batch.sellingPrice),
-        amount: roundMoney(returnQty * purchasePrice),
+        amount: roundMoney(amount),
         reason: String(line.reason || body.reason || '').trim() || null,
       });
     }
@@ -469,6 +472,8 @@ const createExpiredReturn = async (req, res) => {
       supplierName = batch.supplier?.supplierName || null;
       const purchasePrice = toNum(batch.purchasePrice);
       const qty = batch.availableQty;
+      const gst = Number(batch.gstPercentage) || 0;
+      const amount = qty * purchasePrice * (1 + gst / 100);
 
       resolvedItems.push({
         medicineId: batch.medicineId,
@@ -479,7 +484,7 @@ const createExpiredReturn = async (req, res) => {
         quantity: qty,
         purchasePrice,
         sellingPrice: toNum(batch.sellingPrice),
-        amount: roundMoney(qty * purchasePrice),
+        amount: roundMoney(amount),
         reason: String(body.reason || 'Expired medicine return').trim(),
       });
     }

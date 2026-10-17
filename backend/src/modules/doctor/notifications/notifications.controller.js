@@ -57,5 +57,17 @@ async function markRead(req, res) {
   return res.json({ notification: { id: row.id, read_at: row.readAt } });
 }
 
-module.exports = { listMyNotifications, markRead };
+async function markAllRead(req, res) {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ message: 'Access token required' });
+
+  await prisma.notification.updateMany({
+    where: { userId, readAt: null },
+    data: { readAt: new Date() },
+  });
+
+  return res.json({ ok: true });
+}
+
+module.exports = { listMyNotifications, markRead, markAllRead };
 

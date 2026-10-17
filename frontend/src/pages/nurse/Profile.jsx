@@ -5,7 +5,7 @@ export default function NurseProfile() {
     department: 'IPD',
     shift: 'Morning',
     phone: '99999 11111',
-    email: 'nurse.demo@ht-hospital.test',
+    email: 'nurse.demo@vyanx.test',
   };
 
   return (

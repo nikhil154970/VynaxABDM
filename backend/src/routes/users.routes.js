@@ -3,7 +3,7 @@ const { body, param } = require('express-validator');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { roleMiddleware } = require('../middleware/roleMiddleware');
 const { validateRequest } = require('../middleware/validateRequest');
-const { listUsers, createUser, updateUserStatus } = require('../controllers/users.controller');
+const { listUsers, createUser, updateUserStatus, deleteUser } = require('../controllers/users.controller');
 
 const router = express.Router();
 
@@ -26,6 +26,7 @@ router.post(
         'PHARMACIST',
         'LAB_TECHNICIAN',
         'HR_MANAGER',
+        'OT_TECHNICIAN',
       ])
       .withMessage('Valid role is required'),
     body('isActive').optional().isBoolean().withMessage('isActive must be boolean'),
@@ -48,6 +49,17 @@ router.patch(
   ],
   validateRequest,
   updateUserStatus
+);
+
+router.delete(
+  '/:id',
+  authMiddleware,
+  roleMiddleware(['SUPER_ADMIN']),
+  [
+    param('id').isUUID().withMessage('Valid user id is required'),
+  ],
+  validateRequest,
+  deleteUser
 );
 
 module.exports = router;

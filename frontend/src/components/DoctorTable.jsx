@@ -1,3 +1,4 @@
+import { MdEdit, MdCalendarToday, MdBlock, MdCheckCircle } from 'react-icons/md';
 import Badge from './Badge';
 
 const statusBadge = (isActive) => (
@@ -16,63 +17,66 @@ export default function DoctorTable({
   onToggleStatus,
 }) {
   return (
-    <div className="bg-white rounded-3xl ring-1 ring-black/5 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.45)] overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-[#F5F7FA] text-gray-700">
-            <tr>
-              <th className="text-left font-extrabold px-5 py-3">Name</th>
-              <th className="text-left font-extrabold px-5 py-3">Email</th>
-              <th className="text-left font-extrabold px-5 py-3">Specialization</th>
-              <th className="text-left font-extrabold px-5 py-3">Experience</th>
-              <th className="text-left font-extrabold px-5 py-3">Status</th>
-              <th className="text-left font-extrabold px-5 py-3">Availability</th>
-              <th className="text-right font-extrabold px-5 py-3">Action</th>
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50/70 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-100">
+              <th className="px-4 py-3.5 whitespace-nowrap">Name</th>
+              <th className="px-4 py-3.5 whitespace-nowrap">Email</th>
+              <th className="px-4 py-3.5 whitespace-nowrap">Specialization</th>
+              <th className="px-4 py-3.5 whitespace-nowrap">Experience</th>
+              <th className="px-4 py-3.5 whitespace-nowrap">Status</th>
+              <th className="px-4 py-3.5 whitespace-nowrap">Availability</th>
+              <th className="px-4 py-3.5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td className="px-5 py-10 text-gray-400" colSpan={7}>Loading doctors…</td>
+                <td className="px-4 py-10 text-gray-400 text-center font-semibold" colSpan={7}>Loading doctors…</td>
               </tr>
             ) : doctors.length === 0 ? (
               <tr>
-                <td className="px-5 py-10 text-gray-400" colSpan={7}>No doctors found.</td>
+                <td className="px-4 py-10 text-gray-400 text-center font-semibold" colSpan={7}>No doctors found.</td>
               </tr>
             ) : (
               doctors.map((d) => (
-                <tr key={d.id} className="hover:bg-[#F5F7FA]/70 transition">
-                  <td className="px-5 py-3 font-bold text-gray-900">{d.name}</td>
-                  <td className="px-5 py-3 text-gray-600">{d.email}</td>
-                  <td className="px-5 py-3 text-gray-700">{d.specialization}</td>
-                  <td className="px-5 py-3 text-gray-700">{Number(d.experienceYears || 0)} yrs</td>
-                  <td className="px-5 py-3">{statusBadge(d.isActive)}</td>
-                  <td className="px-5 py-3">{availabilityBadge(d.hasAvailability)}</td>
-                  <td className="px-5 py-3">
+                <tr key={d.id} className="hover:bg-slate-50/80 transition duration-150">
+                  <td className="px-4 py-3.5 font-semibold text-gray-900 whitespace-nowrap">{d.name}</td>
+                  <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{d.email}</td>
+                  <td className="px-4 py-3.5 text-gray-700 whitespace-nowrap">{d.specialization}</td>
+                  <td className="px-4 py-3.5 text-gray-700 whitespace-nowrap">{Number(d.experienceYears || 0)} yrs</td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">{statusBadge(d.isActive)}</td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">{availabilityBadge(d.hasAvailability)}</td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => onEdit?.(d)}
-                        className="px-3 py-2 rounded-xl text-xs font-extrabold bg-white ring-1 ring-gray-200 text-gray-700 hover:bg-gray-50 transition"
+                        className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#0077B6]/20 bg-blue-50 text-[#0077B6] hover:border-[#0077B6]/40 hover:bg-sky-50 active:bg-sky-100 transition duration-200 cursor-pointer shadow-sm"
                       >
+                        <MdEdit className="w-3.5 h-3.5" />
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => onAvailability?.(d)}
-                        className="px-3 py-2 rounded-xl text-xs font-extrabold bg-[#00AEEF] text-white hover:bg-[#009ad6] transition"
+                        className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#0077B6] text-white hover:bg-[#005f92] active:bg-[#001B48] transition duration-200 cursor-pointer shadow-sm"
                       >
+                        <MdCalendarToday className="w-3.5 h-3.5" />
                         Availability
                       </button>
                       <button
                         type="button"
                         onClick={() => onToggleStatus?.(d)}
-                        className={`px-3 py-2 rounded-xl text-xs font-extrabold transition ${
+                        className={`inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold border transition duration-200 cursor-pointer ${
                           d.isActive
-                            ? 'bg-[#E53935] text-white hover:bg-[#d6322f]'
-                            : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                            ? 'border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 active:bg-rose-100'
+                            : 'border-emerald-200 bg-white text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 active:bg-emerald-100'
                         }`}
                       >
+                        {d.isActive ? <MdBlock className="w-3.5 h-3.5" /> : <MdCheckCircle className="w-3.5 h-3.5" />}
                         {d.isActive ? 'Disable' : 'Enable'}
                       </button>
                     </div>

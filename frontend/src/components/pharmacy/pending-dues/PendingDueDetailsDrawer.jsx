@@ -24,7 +24,7 @@ export default function PendingDueDetailsDrawer({ open, loading, data, readOnly,
             <div className="min-w-0">
               <p className="text-sm font-extrabold text-slate-900">Pending Due Details</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                {patientName} · <span className="font-mono font-bold text-blue-700">{patientUhid}</span>
+                {patientName} · <span className="font-mono font-bold text-[#0077B6]">{patientUhid}</span>
               </p>
             </div>
             <button
@@ -57,7 +57,7 @@ export default function PendingDueDetailsDrawer({ open, loading, data, readOnly,
                   </div>
                   <div>
                     <p className="text-slate-500">UHID</p>
-                    <p className="font-mono font-semibold text-blue-700">{patientUhid}</p>
+                    <p className="font-mono font-semibold text-[#0077B6]">{patientUhid}</p>
                   </div>
                   <div>
                     <p className="text-slate-500">Mobile</p>
@@ -116,7 +116,7 @@ export default function PendingDueDetailsDrawer({ open, loading, data, readOnly,
                     <tbody>
                       {outstandingBills.map((b) => (
                         <tr key={b.id || b.billId} className="border-t border-slate-100">
-                          <td className="py-2 pr-2 font-mono text-blue-700">{b.billNumber}</td>
+                          <td className="py-2 pr-2 font-mono text-[#0077B6]">{b.billNumber}</td>
                           <td className="py-2 pr-2">{formatMoney(b.totalAmount)}</td>
                           <td className="py-2 pr-2 font-semibold text-rose-700">{formatMoney(b.pendingAmount)}</td>
                           <td className="py-2">
@@ -143,7 +143,7 @@ export default function PendingDueDetailsDrawer({ open, loading, data, readOnly,
                   <button
                     type="button"
                     onClick={() => onCollectPayment(bill)}
-                    className="inline-flex flex-1 items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm hover:bg-blue-700"
+                    className="inline-flex flex-1 items-center justify-center rounded-xl bg-[#0077B6] px-4 py-2.5 text-xs font-extrabold text-white shadow-sm hover:bg-[#005f9e]"
                   >
                     Collect Payment
                   </button>

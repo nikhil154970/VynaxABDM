@@ -7,7 +7,16 @@ const { validateRequest } = require('../middleware/validateRequest');
 router.post(
   '/login',
   [
-    body('email').isEmail().withMessage('Valid email is required'),
+    body('email')
+      .trim()
+      .notEmpty()
+      .withMessage('Email or username is required')
+      .custom((value) => {
+        const isEmail = require('validator').isEmail(String(value));
+        const isUsername = /^[a-zA-Z0-9._-]{3,50}$/.test(String(value));
+        if (isEmail || isUsername) return true;
+        throw new Error('Enter a valid email or username');
+      }),
     body('password').isString().isLength({ min: 6 }).withMessage('Password is required'),
     body('role')
       .isIn([
@@ -18,6 +27,7 @@ router.post(
         'PHARMACIST',
         'LAB_TECHNICIAN',
         'HR_MANAGER',
+        'OT_TECHNICIAN',
       ])
       .withMessage('Valid role is required'),
   ],

@@ -16,6 +16,7 @@ import {
 } from 'react-icons/md';
 import api from '../../../utils/api';
 import { printBillingSlip } from '../../../utils/printBillingSlip';
+import PatientBillingLedger from '../../../components/PatientBillingLedger';
 import '../patients/PatientList.css';
 
 const inputCls =
@@ -69,6 +70,8 @@ export default function AllBills() {
   const [payAmount, setPayAmount] = useState('');
   const [payMode, setPayMode] = useState('Cash');
   const [paySubmitting, setPaySubmitting] = useState(false);
+
+  const [ledgerPatient, setLedgerPatient] = useState(null); // { patientId, patientName, uhid }
 
   const fetchBills = useCallback(async () => {
     setLoading(true);
@@ -361,6 +364,7 @@ export default function AllBills() {
                     'Patient',
                     'UHID',
                     'Visit',
+                    'Department',
                     'Total',
                     'Paid',
                     'Pending',
@@ -396,7 +400,23 @@ export default function AllBills() {
                         <td className="px-3 py-3 align-top lg:px-4">
                           <span className="font-mono text-xs font-bold text-blue-600">{b.billNumber || b.id}</span>
                         </td>
-                        <td className="px-3 py-3 align-top font-semibold text-gray-900">{b.patientName}</td>
+                        <td className="px-3 py-3 align-top font-semibold text-gray-900">
+                          {b.patientId ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLedgerPatient({ patientId: b.patientId, patientName: b.patientName, uhid: b.uhid });
+                              }}
+                              className="text-left font-semibold text-blue-700 underline decoration-dotted underline-offset-2 hover:text-blue-900"
+                              title="View full billing ledger"
+                            >
+                              {b.patientName}
+                            </button>
+                          ) : (
+                            b.patientName
+                          )}
+                        </td>
                         <td className="px-3 py-3 align-top font-mono text-xs font-semibold text-blue-700">{b.uhid}</td>
                         <td className="px-3 py-3 align-top">
                           <span
@@ -406,6 +426,9 @@ export default function AllBills() {
                           >
                             {b.visitType}
                           </span>
+                        </td>
+                        <td className="px-3 py-3 align-top font-semibold text-gray-700 whitespace-nowrap">
+                          {b.department || '—'}
                         </td>
                         <td className="px-3 py-3 align-top font-extrabold text-gray-900">
                           ₹{b.total.toLocaleString('en-IN')}
@@ -431,6 +454,18 @@ export default function AllBills() {
                         </td>
                         <td className="px-3 py-3 align-top">
                           <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap">
+                            <button
+                              type="button"
+                              title="View full patient billing ledger"
+                              disabled={!b.patientId}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLedgerPatient({ patientId: b.patientId, patientName: b.patientName, uhid: b.uhid });
+                              }}
+                              className="px-3 py-1.5 rounded-xl text-xs font-extrabold border border-indigo-200 text-indigo-800 bg-indigo-50 hover:bg-indigo-100 transition disabled:opacity-40"
+                            >
+                              Ledger
+                            </button>
                             <button
                               type="button"
                               title="View bill"
@@ -522,6 +557,10 @@ export default function AllBills() {
                             <div>
                               <p className="k">Visit</p>
                               <p className="v">{selectedBill.visitType}</p>
+                            </div>
+                            <div>
+                              <p className="k">Department</p>
+                              <p className="v">{selectedBill.department || '—'}</p>
                             </div>
                             <div>
                               <p className="k">Date</p>
@@ -691,6 +730,34 @@ export default function AllBills() {
                       {paySubmitting ? 'Saving…' : 'Record payment'}
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {/* Patient full ledger modal */}
+      {ledgerPatient
+        ? createPortal(
+            <div className="pl-modalOverlay" role="dialog" aria-modal="true">
+              <div className="pl-modal pl-modalAnimate max-h-[90vh] max-w-[900px] overflow-y-auto">
+                <div className="pl-modalHeader">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-900">Patient billing ledger</p>
+                    <p className="truncate text-xs text-gray-500">
+                      {ledgerPatient.patientName} · {ledgerPatient.uhid}
+                    </p>
+                  </div>
+                  <button type="button" className="pl-modalClose" onClick={() => setLedgerPatient(null)} title="Close">
+                    <MdClose className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="pl-modalBody">
+                  <PatientBillingLedger
+                    patientId={ledgerPatient.patientId}
+                    onAfterPayment={() => fetchBills()}
+                  />
                 </div>
               </div>
             </div>,

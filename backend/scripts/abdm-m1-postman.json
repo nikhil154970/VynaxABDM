@@ -1,0 +1,280 @@
+{
+	"info": {
+		"_postman_id": "abdm-v3-m1-abha",
+		"name": "ABDM V3 — M1 ABHA Creation & Verification",
+		"description": "ABDM V3 M1 milestone endpoints for ABHA number creation, enrollment, profile management, and login.\n\nSandbox base: https://abhasbx.abdm.gov.in/abha/api\nProduction base: https://abha.abdm.gov.in/api/abha\n\nMaintained by Nirmitee.io — https://nirmitee.io",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Enrollment",
+			"item": [
+				{
+					"name": "Request OTP for Enrollment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "REQUEST-ID",
+								"value": "{{$guid}}"
+							},
+							{
+								"key": "TIMESTAMP",
+								"value": "{{$isoTimestamp}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"scope\": [\"abha-enrol\", \"mobile-verify\"],\n  \"loginHint\": \"aadhaar\",\n  \"loginId\": \"AADHAAR_NUMBER_HERE\",\n  \"otpSystem\": \"aadhaar\"\n}"
+						},
+						"url": {
+							"raw": "{{abhaBaseUrl}}/v3/enrollment/request/otp",
+							"host": ["{{abhaBaseUrl}}"],
+							"path": ["v3", "enrollment", "request", "otp"]
+						},
+						"description": "Request an OTP for ABHA enrollment. The OTP is sent to the mobile number linked with the Aadhaar number.\n\n**Status:** Working\n\n**Flow:**\n1. Call this endpoint with Aadhaar number\n2. User receives OTP on Aadhaar-linked mobile\n3. Use the transactionId from response in subsequent enrollment calls"
+					},
+					"response": []
+				},
+				{
+					"name": "Enroll by Aadhaar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "REQUEST-ID",
+								"value": "{{$guid}}"
+							},
+							{
+								"key": "TIMESTAMP",
+								"value": "{{$isoTimestamp}}"
+							},
+							{
+								"key": "T-TOKEN",
+								"value": "{{transactionId}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"authData\": {\n    \"authMethods\": [\"otp\"],\n    \"otp\": {\n      \"txnId\": \"{{transactionId}}\",\n      \"otpValue\": \"OTP_VALUE_HERE\"\n    }\n  },\n  \"consent\": {\n    \"code\": \"abha-enrollment\",\n    \"version\": \"1.4\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{abhaBaseUrl}}/v3/enrollment/enrol/byAadhaar",
+							"host": ["{{abhaBaseUrl}}"],
+							"path": ["v3", "enrollment", "enrol", "byAadhaar"]
+						},
+						"description": "Complete ABHA enrollment using Aadhaar OTP verification.\n\n**Status:** Working\n\n**Prerequisites:**\n- Must first call 'Request OTP for Enrollment' and have a valid transactionId\n- Replace OTP_VALUE_HERE with the OTP received on the Aadhaar-linked mobile\n\n**Response:** Returns the new ABHA number and profile details"
+					},
+					"response": []
+				},
+				{
+					"name": "Enroll by ABDM",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "REQUEST-ID",
+								"value": "{{$guid}}"
+							},
+							{
+								"key": "TIMESTAMP",
+								"value": "{{$isoTimestamp}}"
+							},
+							{
+								"key": "T-TOKEN",
+								"value": "{{transactionId}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"authData\": {\n    \"authMethods\": [\"otp\"],\n    \"otp\": {\n      \"txnId\": \"{{transactionId}}\",\n      \"otpValue\": \"OTP_VALUE_HERE\"\n    }\n  },\n  \"consent\": {\n    \"code\": \"abha-enrollment\",\n    \"version\": \"1.4\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{abhaBaseUrl}}/v3/enrollment/enrol/byAbdm",
+							"host": ["{{abhaBaseUrl}}"],
+							"path": ["v3", "enrollment", "enrol", "byAbdm"]
+						},
+						"description": "Enroll for ABHA via ABDM (alternate enrollment method).\n\n**Status:** Working\n\n**Prerequisites:**\n- Must first call 'Request OTP for Enrollment' with appropriate scope\n- Replace OTP_VALUE_HERE with the received OTP"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints for creating new ABHA numbers via Aadhaar or ABDM enrollment."
+		},
+		{
+			"name": "Profile",
+			"item": [
+				{
+					"name": "Login — Request OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "REQUEST-ID",
+								"value": "{{$guid}}"
+							},
+							{
+								"key": "TIMESTAMP",
+								"value": "{{$isoTimestamp}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"scope\": [\"abha-login\", \"mobile-verify\"],\n  \"loginHint\": \"abha-number\",\n  \"loginId\": \"{{abhaNumber}}\",\n  \"otpSystem\": \"abdm\"\n}"
+						},
+						"url": {
+							"raw": "{{abhaBaseUrl}}/v3/profile/login/request/otp",
+							"host": ["{{abhaBaseUrl}}"],
+							"path": ["v3", "profile", "login", "request", "otp"]
+						},
+						"description": "Request an OTP for logging into an existing ABHA account.\n\n**Status:** Working\n\n**Supported loginHint values:**\n- `abha-number` — Login with ABHA number\n- `abha-address` — Login with ABHA address (PHR address)\n- `mobile` — Login with registered mobile number\n\n**otpSystem options:**\n- `abdm` — OTP via ABDM system\n- `aadhaar` — OTP via Aadhaar system"
+					},
+					"response": []
+				},
+				{
+					"name": "Login — Verify OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "REQUEST-ID",
+								"value": "{{$guid}}"
+							},
+							{
+								"key": "TIMESTAMP",
+								"value": "{{$isoTimestamp}}"
+							},
+							{
+								"key": "T-TOKEN",
+								"value": "{{transactionId}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"authData\": {\n    \"authMethods\": [\"otp\"],\n    \"otp\": {\n      \"txnId\": \"{{transactionId}}\",\n      \"otpValue\": \"OTP_VALUE_HERE\"\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{abhaBaseUrl}}/v3/profile/login/verify",
+							"host": ["{{abhaBaseUrl}}"],
+							"path": ["v3", "profile", "login", "verify"]
+						},
+						"description": "Verify the OTP to complete ABHA login and get a profile token.\n\n**Status:** Working\n\n**Prerequisites:**\n- Must first call 'Login — Request OTP' and have a valid transactionId"
+					},
+					"response": []
+				},
+				{
+					"name": "Get ABHA Card",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "REQUEST-ID",
+								"value": "{{$guid}}"
+							},
+							{
+								"key": "TIMESTAMP",
+								"value": "{{$isoTimestamp}}"
+							},
+							{
+								"key": "X-TOKEN",
+								"value": "Bearer {{transactionId}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"abhaNumber\": \"{{abhaNumber}}\",\n  \"type\": \"png\"\n}"
+						},
+						"url": {
+							"raw": "{{abhaBaseUrl}}/v3/profile/account/getAbhaCard",
+							"host": ["{{abhaBaseUrl}}"],
+							"path": ["v3", "profile", "account", "getAbhaCard"]
+						},
+						"description": "Download the ABHA card as a PNG or PDF.\n\n**Status:** Working\n\n**Prerequisites:**\n- Must be logged in (have a valid profile token from Login — Verify OTP)\n\n**type options:**\n- `png` — PNG image\n- `pdf` — PDF document"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints for ABHA profile login and management."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-save transactionId from responses",
+					"// (runs at collection level for all M1 requests)"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-extract transactionId from response if present",
+					"if (pm.response.code === 200) {",
+					"    try {",
+					"        var jsonData = pm.response.json();",
+					"        if (jsonData.txnId) {",
+					"            pm.environment.set('transactionId', jsonData.txnId);",
+					"            console.log('Saved transactionId:', jsonData.txnId);",
+					"        }",
+					"    } catch (e) {",
+					"        // Response may not be JSON (e.g., ABHA card image)",
+					"    }",
+					"}"
+				]
+			}
+		}
+	]
+}

@@ -36,10 +36,10 @@ export default function AvailabilityScheduler({
   };
 
   return (
-    <div className="bg-white rounded-3xl ring-1 ring-black/5 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.45)] overflow-hidden">
-      <div className="px-6 sm:px-8 py-6 border-b border-gray-100 flex items-center justify-between gap-3">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 sm:px-8 py-4 border-b border-gray-100 flex items-center justify-between gap-3 bg-gray-50/50">
         <div>
-          <p className="text-sm font-extrabold text-[#2D2A6E]">Weekly Schedule</p>
+          <p className="text-base font-bold text-[#001B48]">Weekly Schedule</p>
           <p className="text-xs text-gray-500 mt-0.5">{doctorLabel}</p>
         </div>
         <Badge variant={loading ? 'amber' : 'blue'}>{loading ? 'Loading…' : 'Ready'}</Badge>
@@ -52,44 +52,48 @@ export default function AvailabilityScheduler({
             return (
               <div
                 key={d.key}
-                className="rounded-2xl ring-1 ring-gray-200 p-4 bg-[#F5F7FA]/55 hover:bg-[#F5F7FA] transition"
+                className={`rounded-2xl border p-4 transition-all duration-200 ${
+                  s.isAvailable
+                    ? 'border-blue-100 bg-gradient-to-r from-blue-50/50 to-white hover:from-blue-50 hover:to-white/80 shadow-sm'
+                    : 'border-gray-100 bg-gradient-to-r from-slate-50/60 to-white hover:from-slate-50 hover:to-white/80'
+                }`}
               >
-                <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div className="min-w-[160px]">
-                    <p className="text-sm font-extrabold text-gray-900">{d.label}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Set availability + timings</p>
+                    <p className="text-sm font-bold text-gray-900">{d.label}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Set availability & timings</p>
                   </div>
 
-                  <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <label className="text-xs font-extrabold text-gray-600">Start</label>
+                      <span className="text-xs font-semibold text-gray-500">Start</span>
                       <input
                         type="time"
                         value={toTime(s.startTime)}
                         onChange={(e) => update(d.key, { startTime: e.target.value })}
-                        className="px-3 py-2 rounded-xl ring-1 ring-gray-200 focus:ring-2 focus:ring-[#00AEEF] outline-none bg-white text-sm font-bold text-gray-800"
+                        className="px-3 py-1.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0077B6]/25 focus:border-[#0077B6] outline-none bg-white text-sm font-semibold text-gray-700 transition duration-200 hover:border-gray-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={!s.isAvailable}
                       />
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <label className="text-xs font-extrabold text-gray-600">End</label>
+                      <span className="text-xs font-semibold text-gray-500">End</span>
                       <input
                         type="time"
                         value={toTime(s.endTime)}
                         onChange={(e) => update(d.key, { endTime: e.target.value })}
-                        className="px-3 py-2 rounded-xl ring-1 ring-gray-200 focus:ring-2 focus:ring-[#00AEEF] outline-none bg-white text-sm font-bold text-gray-800"
+                        className="px-3 py-1.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0077B6]/25 focus:border-[#0077B6] outline-none bg-white text-sm font-semibold text-gray-700 transition duration-200 hover:border-gray-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={!s.isAvailable}
                       />
                     </div>
 
-                    <label className="flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-gray-200 bg-white">
-                      <span className="text-xs font-extrabold text-gray-700">Available</span>
+                    <label className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-gray-300 transition duration-200">
+                      <span className="text-xs font-semibold text-gray-700">Available</span>
                       <input
                         type="checkbox"
                         checked={Boolean(s.isAvailable)}
                         onChange={(e) => update(d.key, { isAvailable: e.target.checked })}
-                        className="h-5 w-5 accent-[#00AEEF]"
+                        className="h-4.5 w-4.5 accent-[#0077B6] cursor-pointer"
                       />
                     </label>
                   </div>

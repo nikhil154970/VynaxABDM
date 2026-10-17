@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import api from '../../../utils/api';
 import './NurseClinicalSections.css';
 
 function formatAdmissionTimestamp(admissionAtIso) {
@@ -182,147 +183,267 @@ function treatmentMedicinesToRows(medicines) {
   });
 }
 
-export function NurseDoctorOrdersPanel({ patientId, treatmentPlan }) {
-  const doctorOrders = useMemo(() => {
-    const meds = treatmentPlan?.medicines;
-    const rows = treatmentMedicinesToRows(meds);
-    if (rows.length) return rows;
-    return mockDoctorOrders(patientId);
-  }, [patientId, treatmentPlan]);
+export function NurseDoctorOrdersPanel({ patientId, admissionId, treatmentPlan }) {
+  const [orders, setOrders] = useState([]);
+  const [orderText, setOrderText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [msg, setMsg] = useState('');
 
-  const hasLivePlan = Array.isArray(treatmentPlan?.medicines) && treatmentPlan.medicines.length > 0;
+  const fetchOrders = useCallback(async () => {
+    if (!admissionId) return;
+    setLoading(true);
+    try {
+      const res = await api.get('/nurse/doctor-orders', { params: { admissionId } });
+      setOrders(Array.isArray(res.data?.items) ? res.data.items : []);
+    } catch {
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [admissionId]);
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  const handleAdd = async () => {
+    if (!orderText.trim() || adding) return;
+    setAdding(true);
+    try {
+      const res = await api.post('/nurse/doctor-orders', {
+        admissionId, patientId, orderText: orderText.trim(),
+      });
+      setOrders((prev) => [res.data.item, ...prev]);
+      setOrderText('');
+      setMsg('Order added');
+    } catch (e) {
+      setMsg(e?.response?.data?.message || 'Failed to add order');
+    } finally {
+      setAdding(false);
+    }
+    setTimeout(() => setMsg(''), 2000);
+  };
+
+  const handleComplete = async (id) => {
+    try {
+      const res = await api.patch(`/nurse/doctor-orders/${id}/complete`);
+      setOrders((prev) => prev.map((o) => (o.id === id ? res.data.item : o)));
+    } catch {
+      setMsg('Failed to complete order');
+      setTimeout(() => setMsg(''), 2000);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Remove this order?')) return;
+    try {
+      await api.delete(`/nurse/doctor-orders/${id}`);
+      setOrders((prev) => prev.filter((o) => o.id !== id));
+    } catch {
+      setMsg('Failed to delete order');
+      setTimeout(() => setMsg(''), 2000);
+    }
+  };
+
+  const pending = orders.filter((o) => o.status === 'PENDING');
+  const completed = orders.filter((o) => o.status === 'COMPLETED');
 
   return (
     <section className="nurse-clinical-card nurse-clinical-card--flush">
       <header className="nurse-clinical-cardHeader">
-        <h2 className="nurse-clinical-h2">Doctor orders</h2>
-        <span className={hasLivePlan ? 'nurse-clinical-chip nurse-clinical-chip--icu' : 'nurse-clinical-chip nurse-clinical-chip--live'}>
-          {hasLivePlan ? 'Treatment plan' : 'Sample'}
+        <h2 className="nurse-clinical-h2">Doctor Orders</h2>
+        <span className="nurse-clinical-chip nurse-clinical-chip--muted">
+          {pending.length} pending
         </span>
       </header>
-      <div className="nurse-clinical-cardBody nurse-clinical-pad0">
-        {hasLivePlan && treatmentPlan?.description ? (
-          <div className="nurse-clinical-cardBody" style={{ paddingBottom: 0 }}>
-            <p className="nurse-clinical-muted" style={{ margin: 0 }}>
-              <strong>Plan:</strong> {treatmentPlan.description}
-            </p>
-            {treatmentPlan.instructions ? (
-              <p className="nurse-clinical-muted" style={{ marginTop: 8 }}>
-                <strong>Instructions:</strong> {treatmentPlan.instructions}
-              </p>
-            ) : null}
+      <div className="nurse-clinical-cardBody">
+        {admissionId ? (
+          <div className="nurse-clinical-addRow">
+            <input
+              className="nurse-clinical-input nurse-clinical-input--grow"
+              placeholder="Add doctor order..."
+              value={orderText}
+              onChange={(e) => setOrderText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            />
+            <button type="button" className="nurse-clinical-btn nurse-clinical-btn--primary" onClick={handleAdd} disabled={adding || !orderText.trim()}>
+              {adding ? 'Adding…' : 'Add'}
+            </button>
           </div>
         ) : null}
-        <div className="nurse-clinical-tableWrap">
-          <table className="nurse-clinical-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Order</th>
-                <th>Priority</th>
-                <th>Details</th>
-                <th>Dosage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {doctorOrders.map((o) => (
-                <tr key={o.id}>
-                  <td>{o.type}</td>
-                  <td className="nurse-clinical-tdStrong">{o.name}</td>
-                  <td>
-                    <span
-                      className={
-                        o.priority === 'STAT'
-                          ? 'nurse-clinical-pri nurse-clinical-pri--stat'
-                          : o.priority === 'Urgent'
-                            ? 'nurse-clinical-pri nurse-clinical-pri--urgent'
-                            : 'nurse-clinical-pri'
-                      }
-                    >
-                      {o.priority}
-                    </span>
-                  </td>
-                  <td>{o.status}</td>
-                  <td className="nurse-clinical-tdMuted">{o.orderedAt}</td>
-                </tr>
+        {loading ? <p className="nurse-clinical-muted">Loading…</p> : null}
+        {!loading && pending.length === 0 && completed.length === 0 ? (
+          <p className="nurse-clinical-muted">
+            {admissionId ? 'No orders yet. Add one above.' : 'Select a patient to see orders.'}
+          </p>
+        ) : null}
+        {pending.length > 0 ? (
+          <ul className="nurse-clinical-taskList">
+            {pending.map((o) => (
+              <li key={o.id} className="nurse-clinical-taskRow">
+                <label className="nurse-clinical-taskLabel" style={{ cursor: 'pointer' }} onClick={() => handleComplete(o.id)}>
+                  <input type="checkbox" checked={false} readOnly />
+                  <span>{o.orderText}</span>
+                </label>
+                <button type="button" className="nurse-clinical-btn nurse-clinical-btn--danger" style={{ padding: '2px 8px', fontSize: '0.75rem' }} onClick={() => handleDelete(o.id)}>
+                  &times;
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {completed.length > 0 ? (
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}>
+              Completed Orders ({completed.length})
+            </summary>
+            <ul className="nurse-clinical-taskList" style={{ marginTop: 8 }}>
+              {completed.map((o) => (
+                <li key={o.id} className="nurse-clinical-taskRow">
+                  <span className="nurse-clinical-taskDone" style={{ textDecoration: 'line-through', color: '#999' }}>
+                    {o.orderText}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: '#999', marginLeft: 8 }}>
+                    {o.completedAt ? new Date(o.completedAt).toLocaleString('en-IN') : ''}
+                  </span>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="nurse-clinical-footnote">
-          {hasLivePlan ? 'Medicines from the doctor treatment plan for this admission.' : 'No treatment plan on file yet — showing sample rows until doctor adds a plan.'}
-        </p>
+            </ul>
+          </details>
+        ) : null}
+        {msg ? <p className="nurse-clinical-msg">{msg}</p> : null}
       </div>
     </section>
   );
 }
 
-const DEFAULT_TASKS = (pid) => [
-  { id: `${pid}-t1`, label: '14:00 — IV antibiotic · verify line patency', done: false },
-  { id: `${pid}-t2`, label: '15:30 — SpO₂ spot check (ICU protocol)', done: false },
-  { id: `${pid}-t3`, label: '16:00 — Intake/output shift total', done: false },
-];
-
-function tasksKey(patientId) {
-  return `nurseTasks:${patientId}`;
-}
-
-export function NurseTasksPanel({ patientId, admissionId, tasksSeed, onPersistPatch }) {
+export function NurseTasksPanel({ patientId, admissionId }) {
   const [tasks, setTasks] = useState([]);
+  const [taskText, setTaskText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [msg, setMsg] = useState('');
 
-  useEffect(() => {
-    if (tasksSeed != null) {
-      setTasks(Array.isArray(tasksSeed) ? tasksSeed : []);
-      return;
+  const fetchTasks = useCallback(async () => {
+    if (!admissionId) return;
+    setLoading(true);
+    try {
+      const res = await api.get('/nurse/my-tasks', { params: { admissionId } });
+      setTasks(Array.isArray(res.data?.items) ? res.data.items : []);
+    } catch {
+      setTasks([]);
+    } finally {
+      setLoading(false);
     }
-    const raw = safeParse(localStorage.getItem(tasksKey(patientId)) || '', null);
-    if (Array.isArray(raw) && raw.length) setTasks(raw);
-    else setTasks(DEFAULT_TASKS(patientId));
-  }, [patientId, tasksSeed]);
+  }, [admissionId]);
 
-  const toggle = (id) => {
-    setTasks((list) => list.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+  const handleAdd = async () => {
+    if (!taskText.trim() || adding) return;
+    setAdding(true);
+    try {
+      const res = await api.post('/nurse/my-tasks', {
+        admissionId, patientId, task: taskText.trim(),
+      });
+      setTasks((prev) => [res.data.item, ...prev]);
+      setTaskText('');
+      setMsg('Task added');
+    } catch (e) {
+      setMsg(e?.response?.data?.message || 'Failed to add task');
+    } finally {
+      setAdding(false);
+    }
+    setTimeout(() => setMsg(''), 2000);
   };
 
-  const saveTasks = async () => {
-    localStorage.setItem(tasksKey(patientId), JSON.stringify(tasks));
-    if (admissionId && typeof onPersistPatch === 'function') {
-      try {
-        await onPersistPatch({ nurseTasks: tasks });
-        setMsg('Tasks saved.');
-      } catch (e) {
-        setMsg(e?.response?.data?.message || 'Could not sync to server');
-      }
-    } else {
-      setMsg('Tasks saved.');
+  const handleComplete = async (id) => {
+    try {
+      const res = await api.patch(`/nurse/my-tasks/${id}/complete`);
+      setTasks((prev) => prev.map((t) => (t.id === id ? res.data.item : t)));
+    } catch {
+      setMsg('Failed to complete task');
+      setTimeout(() => setMsg(''), 2000);
     }
-    window.setTimeout(() => setMsg(''), 2000);
   };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Remove this task?')) return;
+    try {
+      await api.delete(`/nurse/my-tasks/${id}`);
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+    } catch {
+      setMsg('Failed to delete task');
+      setTimeout(() => setMsg(''), 2000);
+    }
+  };
+
+  const pending = tasks.filter((t) => t.status === 'PENDING');
+  const completed = tasks.filter((t) => t.status === 'COMPLETED');
 
   return (
     <section className="nurse-clinical-card nurse-clinical-card--flush">
       <header className="nurse-clinical-cardHeader">
-        <h2 className="nurse-clinical-h2">My tasks</h2>
-        <span className="nurse-clinical-chip nurse-clinical-chip--muted">Tick when done</span>
+        <h2 className="nurse-clinical-h2">My Tasks</h2>
+        <span className="nurse-clinical-chip nurse-clinical-chip--muted">
+          {pending.length} pending
+        </span>
       </header>
       <div className="nurse-clinical-cardBody">
-        <ul className="nurse-clinical-taskList">
-          {tasks.map((t) => (
-            <li key={t.id} className="nurse-clinical-taskRow">
-              <label className="nurse-clinical-taskLabel">
-                <input type="checkbox" checked={t.done} onChange={() => toggle(t.id)} />
-                <span className={t.done ? 'nurse-clinical-taskDone' : ''}>{t.label}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
-        <div className="nurse-clinical-actions">
-          <button type="button" className="nurse-clinical-btn nurse-clinical-btn--primary" onClick={saveTasks}>
-            Save tasks
-          </button>
-          {msg ? <span className="nurse-clinical-msg">{msg}</span> : null}
-        </div>
+        {admissionId ? (
+          <div className="nurse-clinical-addRow">
+            <input
+              className="nurse-clinical-input nurse-clinical-input--grow"
+              placeholder="Add a task..."
+              value={taskText}
+              onChange={(e) => setTaskText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            />
+            <button type="button" className="nurse-clinical-btn nurse-clinical-btn--primary" onClick={handleAdd} disabled={adding || !taskText.trim()}>
+              {adding ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+        ) : null}
+        {loading ? <p className="nurse-clinical-muted">Loading…</p> : null}
+        {!loading && pending.length === 0 && completed.length === 0 ? (
+          <p className="nurse-clinical-muted">
+            {admissionId ? 'No tasks yet. Add one above.' : 'Select a patient to see tasks.'}
+          </p>
+        ) : null}
+        {pending.length > 0 ? (
+          <ul className="nurse-clinical-taskList">
+            {pending.map((t) => (
+              <li key={t.id} className="nurse-clinical-taskRow">
+                <label className="nurse-clinical-taskLabel" style={{ cursor: 'pointer' }} onClick={() => handleComplete(t.id)}>
+                  <input type="checkbox" checked={false} readOnly />
+                  <span>{t.task}</span>
+                </label>
+                <button type="button" className="nurse-clinical-btn nurse-clinical-btn--danger" style={{ padding: '2px 8px', fontSize: '0.75rem' }} onClick={() => handleDelete(t.id)}>
+                  &times;
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {completed.length > 0 ? (
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}>
+              Completed Tasks ({completed.length})
+            </summary>
+            <ul className="nurse-clinical-taskList" style={{ marginTop: 8 }}>
+              {completed.map((t) => (
+                <li key={t.id} className="nurse-clinical-taskRow">
+                  <span className="nurse-clinical-taskDone" style={{ textDecoration: 'line-through', color: '#999' }}>
+                    {t.task}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: '#999', marginLeft: 8 }}>
+                    {t.completedAt ? new Date(t.completedAt).toLocaleString('en-IN') : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+        {msg ? <p className="nurse-clinical-msg">{msg}</p> : null}
       </div>
     </section>
   );

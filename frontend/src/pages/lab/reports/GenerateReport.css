@@ -86,13 +86,13 @@
   gap: 2px;
 }
 .lab-reports-reportHeader-hospitalName {
-  font-size: 26px;
+  font-size: 18px;
   font-weight: 900;
   color: #fff;
   font-family: Georgia, serif;
   text-transform: uppercase;
-  letter-spacing: 2px;
-  line-height: 1.05;
+  letter-spacing: 1px;
+  line-height: 1.15;
 }
 .lab-reports-reportHeader-hospitalSub {
   font-size: 9.5px;

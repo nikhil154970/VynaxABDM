@@ -4,13 +4,20 @@ function StatusPill({ status }) {
   const s = String(status || 'WAITING').toUpperCase();
   const meta =
     s === 'COMPLETED'
-      ? { bg: 'rgba(22,163,74,0.12)', fg: '#15803d', label: 'Completed' }
+      ? { bg: 'rgba(22,163,74,0.1)', fg: '#16A34A', label: 'Completed' }
       : s === 'IN_PROGRESS'
-        ? { bg: 'rgba(0,174,239,0.14)', fg: '#0369a1', label: 'In Progress' }
-        : { bg: 'rgba(148,163,184,0.18)', fg: '#475569', label: 'Waiting' };
+        ? { bg: 'rgba(0,119,182,0.1)', fg: '#0077B6', label: 'In Progress' }
+        : { bg: 'rgba(71,85,105,0.1)', fg: '#475569', label: 'Waiting' };
 
   return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-extrabold" style={{ background: meta.bg, color: meta.fg }}>
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border"
+      style={{
+        background: meta.bg,
+        color: meta.fg,
+        borderColor: `${meta.fg}15`,
+      }}
+    >
       {meta.label}
     </span>
   );
@@ -20,13 +27,20 @@ function AdmissionStatusPill({ status }) {
   const s = String(status || 'ADMITTED').toUpperCase();
   const meta =
     s === 'READY_FOR_DISCHARGE'
-      ? { bg: 'rgba(234,88,12,0.12)', fg: '#c2410c', label: 'Ready for Discharge' }
+      ? { bg: 'rgba(217,119,6,0.1)', fg: '#D97706', label: 'Ready for Discharge' }
       : s === 'UNDER_TREATMENT'
-        ? { bg: 'rgba(0,174,239,0.14)', fg: '#0369a1', label: 'Under Treatment' }
-        : { bg: 'rgba(22,163,74,0.12)', fg: '#15803d', label: 'Admitted' };
+        ? { bg: 'rgba(0,119,182,0.1)', fg: '#0077B6', label: 'Under Treatment' }
+        : { bg: 'rgba(22,163,74,0.1)', fg: '#16A34A', label: 'Admitted' };
 
   return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-extrabold" style={{ background: meta.bg, color: meta.fg }}>
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border"
+      style={{
+        background: meta.bg,
+        color: meta.fg,
+        borderColor: `${meta.fg}15`,
+      }}
+    >
       {meta.label}
     </span>
   );
@@ -37,69 +51,83 @@ export default function PatientTable({ rows = [], loading = false, activeId = ''
   const isIPD = variant === 'ipd';
 
   return (
-    <div className="rounded-2xl border overflow-hidden" style={{ background: '#FFFFFF', borderColor: 'rgba(0,0,0,0.06)' }}>
+    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left" style={{ background: '#F5F7FA' }}>
+        <table className="min-w-full divide-y divide-gray-100 text-sm">
+          <thead className="bg-gray-50/70">
+            <tr>
               {isIPD ? (
                 <>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">Patient Name</th>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">UHID</th>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">Bed Number</th>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">Admission Date</th>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">Status</th>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">Action</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">Patient Name</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">UHID</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">Bed Number</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">Admission Date</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">Status</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Action</th>
                 </>
               ) : (
                 <>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">Time</th>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">Patient Name</th>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">OPD No</th>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">Status</th>
-                  <th className="px-5 py-3 font-extrabold text-gray-700">Action</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">Time</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">Patient Name</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">OPD No</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-left">Status</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Action</th>
                 </>
               )}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-gray-100 bg-white">
             {loading ? (
-              <tr><td colSpan={isIPD ? 6 : 5} className="px-5 py-6 text-gray-500">Loading…</td></tr>
+              <tr>
+                <td colSpan={isIPD ? 6 : 5} className="px-6 py-10 text-center text-gray-500 font-semibold">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-[#0077B6] border-t-transparent rounded-full animate-spin"></div>
+                    Loading patients...
+                  </div>
+                </td>
+              </tr>
             ) : !hasRows ? (
-              <tr><td colSpan={isIPD ? 6 : 5} className="px-5 py-6 text-gray-500">No patients.</td></tr>
+              <tr>
+                <td colSpan={isIPD ? 6 : 5} className="px-6 py-10 text-center text-gray-500 font-semibold">
+                  No assigned patients found.
+                </td>
+              </tr>
             ) : (
               rows.map((r) => {
                 const isActive = activeId === r.id;
                 return (
                   <tr
                     key={r.id}
-                    className="border-t cursor-pointer"
-                    style={{
-                      borderColor: 'rgba(0,0,0,0.06)',
-                      background: isActive ? 'rgba(0,174,239,0.10)' : '#FFFFFF',
-                    }}
+                    className={`transition-colors duration-150 cursor-pointer ${
+                      isActive ? 'bg-[#0077B6]/5' : 'hover:bg-gray-50/50'
+                    }`}
                     onClick={() => onSelect?.(r)}
                   >
                     {isIPD ? (
                       <>
-                        <td className="px-5 py-3 text-gray-900">
-                          <p className="font-extrabold">{r.patient_name || '—'}</p>
+                        <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">
+                          <p>{r.patient_name || '—'}</p>
                           {r.ipd_number ? (
-                            <p className="mt-0.5 font-mono text-[11px] font-bold text-blue-600">{r.ipd_number}</p>
+                            <p className="mt-0.5 font-mono text-[11px] font-bold text-[#0077B6]">{r.ipd_number}</p>
                           ) : null}
                         </td>
-                        <td className="px-5 py-3 text-gray-700">{r.uhid || '—'}</td>
-                        <td className="px-5 py-3 text-gray-700">{r.bed_number || '—'}</td>
-                        <td className="px-5 py-3 text-gray-700">
-                          {r.admission_date ? new Date(r.admission_date).toLocaleDateString() : '—'}
+                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-gray-600 font-mono">
+                          {r.uhid || '—'}
                         </td>
-                        <td className="px-5 py-3"><AdmissionStatusPill status={r.status} /></td>
-                        <td className="px-5 py-3">
+                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-gray-700">
+                          {r.bed_number || '—'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-600">
+                          {r.admission_date ? new Date(r.admission_date).toLocaleDateString('en-IN') : '—'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <AdmissionStatusPill status={r.status} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); onSelect?.(r); }}
-                            className="px-3 py-2 rounded-xl text-xs font-extrabold text-white"
-                            style={{ background: '#00AEEF' }}
+                            onClick={() => onSelect?.(r)}
+                            className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#0077B6] hover:bg-[#005B8C] transition-all shadow-sm active:scale-95 duration-200"
                           >
                             View Details
                           </button>
@@ -107,19 +135,26 @@ export default function PatientTable({ rows = [], loading = false, activeId = ''
                       </>
                     ) : (
                       <>
-                        <td className="px-5 py-3 font-extrabold text-gray-900">{r.time || '—'}</td>
-                        <td className="px-5 py-3 text-gray-900">{r.patient_name || '—'}</td>
-                        <td className="px-5 py-3 text-gray-700">{r.opd_number || r.opdNumber || '—'}</td>
-                        <td className="px-5 py-3"><StatusPill status={r.status} /></td>
-                        <td className="px-5 py-3">
+                        <td className="px-6 py-4 whitespace-nowrap font-bold text-[#001B48]">
+                          {r.time || '—'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-gray-900">
+                          {r.patient_name || '—'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-gray-600 font-mono">
+                          {r.opd_number || r.opdNumber || '—'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <StatusPill status={r.status} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
                           {String(r.status || '').toUpperCase() === 'COMPLETED' ? (
                             <span className="text-xs font-semibold text-gray-400">—</span>
                           ) : (
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); onSelect?.(r); }}
-                              className="px-3 py-2 rounded-xl text-xs font-extrabold text-white"
-                              style={{ background: '#00AEEF' }}
+                              onClick={() => onSelect?.(r)}
+                              className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#0077B6] hover:bg-[#005B8C] transition-all shadow-sm active:scale-95 duration-200"
                             >
                               Start Consultation
                             </button>
@@ -137,4 +172,3 @@ export default function PatientTable({ rows = [], loading = false, activeId = ''
     </div>
   );
 }
-

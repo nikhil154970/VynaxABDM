@@ -3,11 +3,13 @@ import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import AdminHeader from './AdminHeader';
 import GlobalLoader from './GlobalLoader';
+import AssistantPanel from './assistant/AssistantPanel';
 
 export default function Layout({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const isReception = location.pathname.startsWith('/dashboard/reception');
+  const isPharmacy = location.pathname.startsWith('/dashboard/pharmacy');
   const contentRef = useRef(null);
 
   // On every route change, start page from top.
@@ -27,6 +29,7 @@ export default function Layout({ children }) {
           {children}
         </div>
       </main>
+      {isPharmacy && <AssistantPanel module="pharmacy" />}
     </div>
   );
 }

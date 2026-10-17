@@ -13,6 +13,11 @@ import ViewNotes from './notes/ViewNotes';
 
 import Notifications from './notifications/Notifications';
 import NurseProfile from './Profile';
+import OtRequestStatus from './OtRequestStatus';
+import PreOperativeAssessment from './PreOperativeAssessment';
+import OtPatients from './OtPatients';
+import OtPatientDetail from './OtPatientDetail';
+import NurseDutySchedule from './NurseDutySchedule';
 
 const ComingSoon = ({ page }) => (
   <div className="p-8 flex items-center justify-center h-full">
@@ -41,6 +46,15 @@ export default function NurseRoutes() {
         {/* Notes */}
         <Route path="notes/add" element={<AddNotes />} />
         <Route path="notes" element={<ViewNotes />} />
+
+        {/* OT */}
+        <Route path="ot-requests" element={<OtRequestStatus />} />
+        <Route path="pre-assessment" element={<PreOperativeAssessment />} />
+        <Route path="ot-patients" element={<OtPatients />} />
+        <Route path="ot-patients/:id" element={<OtPatientDetail />} />
+
+        {/* Duty Schedule */}
+        <Route path="duty-schedule" element={<NurseDutySchedule />} />
 
         {/* Notifications */}
         <Route path="notifications" element={<Notifications />} />

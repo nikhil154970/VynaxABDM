@@ -50,7 +50,7 @@
 }
 
 .pharmacy-inventory-table td:first-child {
-  color: #2563eb;
+  color: #0077B6;
   font-weight: 600;
 }
 
@@ -76,9 +76,9 @@
 }
 
 .pharmacy-inventory-view-tab.active {
-  border-color: #2563eb;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: #0077B6;
+  background: #e0f2fe;
+  color: #0077B6;
 }
 
 /* Filters stay in document flow — no sticky overlap on table */

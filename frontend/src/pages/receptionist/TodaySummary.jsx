@@ -128,7 +128,7 @@ export default function TodaySummary() {
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${d.pct}%`, background: 'linear-gradient(90deg, #1d4ed8, #3b82f6)' }}
+                      style={{ width: `${d.pct}%`, background: '#0077B6' }}
                     />
                   </div>
                 </div>

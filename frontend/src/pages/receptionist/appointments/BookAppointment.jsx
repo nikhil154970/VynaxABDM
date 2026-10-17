@@ -49,7 +49,8 @@ export default function BookAppointment() {
   const [doctors, setDoctors] = useState([]);
 
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-  const [timeSlots, setTimeSlots] = useState([]); // [{ label, available }]
+  const [timeSlots, setTimeSlots] = useState([]); // [{ label, available, past, booked }]
+  const [slotsMessage, setSlotsMessage] = useState('');
 
   const [success, setSuccess] = useState(null); // { token, opdNumber }
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -71,6 +72,9 @@ export default function BookAppointment() {
   });
 
   const [isPrefillingEdit, setIsPrefillingEdit] = useState(false);
+  const [isPrefillingReferral, setIsPrefillingReferral] = useState(
+    () => !!location?.state?.prefillPatient?.uhid
+  );
 
   const resetForm = () => {
     setErrors({});
@@ -83,6 +87,7 @@ export default function BookAppointment() {
     setPatientSearchOpen(false);
     setDoctors([]);
     setTimeSlots([]);
+    setSlotsMessage('');
     setForm({
       department: '',
       doctorId: '',
@@ -151,17 +156,15 @@ export default function BookAppointment() {
   };
 
   const fetchTimeSlots = async (doctorId, date) => {
-    // TODO: Replace with GET /slots?doctorId=&date=
-    if (!doctorId || !date) return [];
-    await new Promise((r) => setTimeout(r, 250));
-    const base = ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM'];
-    return base.map((label) => {
-      const seed = `${doctorId}|${date}|${label}`;
-      let h = 0;
-      for (let i = 0; i < seed.length; i += 1) h = (h * 31 + seed.charCodeAt(i)) % 997;
-      const available = h % 7 !== 0; // deterministic "some unavailable"
-      return { label, available };
-    });
+    if (!doctorId || !date) return { slots: [], message: '' };
+    try {
+      const res = await api.get(`/doctors/${doctorId}/slots`, { params: { date } });
+      return { slots: res.data?.slots || [], message: res.data?.message || '' };
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to fetch slots';
+      setSubmitError(`Time slots error: ${msg}`);
+      return { slots: [], message: '' };
+    }
   };
 
   const [tokenPreview, setTokenPreview] = useState('—');
@@ -225,13 +228,13 @@ export default function BookAppointment() {
     const ayushman = p?.isAyushman === true || isAyushmanSponsor(p?.sponsor);
     const next = { ...p, isAyushman: ayushman, sponsor: p?.sponsor || (ayushman ? 'AYUSHMAN' : '') };
     setSelectedPatient(next);
-    if (ayushman) {
-      setForm((prev) => ({
-        ...prev,
-        paymentStatus: 'Paid',
-        paymentMode: AYUSHMAN_PAYMENT_LABEL,
-      }));
-    }
+    setForm((prev) => ({
+      ...prev,
+      department: p?.department || prev.department,
+      doctorId: p?.doctorId || prev.doctorId || '',
+      doctorName: p?.doctorName || prev.doctorName || '',
+      ...(ayushman ? { paymentStatus: 'Paid', paymentMode: AYUSHMAN_PAYMENT_LABEL } : {})
+    }));
     return next;
   };
 
@@ -288,8 +291,8 @@ export default function BookAppointment() {
       }
     };
 
-    // Don't wipe selections while prefilling edit.
-    if (!isPrefillingEdit && !isEditMode) {
+    // Don't wipe selections while prefilling edit or referral.
+    if (!isPrefillingEdit && !isPrefillingReferral && !isEditMode) {
       setForm((prev) => ({ ...prev, doctorId: '', doctorName: '', timeSlot: '' }));
       setTimeSlots([]);
     }
@@ -303,21 +306,25 @@ export default function BookAppointment() {
 
     run().finally(() => {
       // allow normal resets after initial prefill
-      if (active) setIsPrefillingEdit(false);
+      if (active) {
+        setIsPrefillingEdit(false);
+        setIsPrefillingReferral(false);
+      }
     });
     return () => {
       active = false;
     };
-  }, [form.department, isPrefillingEdit]);
+  }, [form.department, isPrefillingEdit, isPrefillingReferral]);
 
   useEffect(() => {
     let active = true;
     const run = async () => {
       setIsLoadingSlots(true);
       try {
-        const slots = await fetchTimeSlots(form.doctorId, form.date);
+        const { slots, message } = await fetchTimeSlots(form.doctorId, form.date);
         if (!active) return;
         setTimeSlots(slots);
+        setSlotsMessage(message);
       } finally {
         if (active) setIsLoadingSlots(false);
       }
@@ -334,6 +341,7 @@ export default function BookAppointment() {
       setForm((prev) => ({ ...prev, timeSlot: '' }));
     }
     setTimeSlots([]);
+    setSlotsMessage('');
 
     if (!canFetchSlots) return () => {
       active = false;
@@ -404,11 +412,11 @@ export default function BookAppointment() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <form onSubmit={(e) => e.preventDefault()} className="p-6 max-w-6xl mx-auto space-y-5">
+      <form onSubmit={(e) => e.preventDefault()} className="w-full max-w-none px-4 py-5 sm:px-6 xl:px-8 space-y-5">
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 gap-5">
           {/* Left / Main */}
-          <div className="xl:col-span-2 space-y-5">
+          <div className="space-y-5">
             {/* Patient selection */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -420,7 +428,7 @@ export default function BookAppointment() {
                   type="button"
                   onClick={() => navigate('/dashboard/reception/patients/register')}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow hover:shadow-md transition hover:-translate-y-0.5"
-                  style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}
+                  style={{ backgroundColor: '#0077B6' }}
                 >
                   <MdAdd className="w-4 h-4" /> New Patient
                 </button>
@@ -540,7 +548,7 @@ export default function BookAppointment() {
                   <label className="text-xs font-semibold text-gray-600 block mb-1.5">Department</label>
                   <select name="department" value={form.department} onChange={handleChange} className={inputCls}>
                     <option value="">Select department</option>
-                    {DEPARTMENTS.map((d) => (
+                    {DEPARTMENTS.filter(d => d !== 'Emergency & Trauma Care' && d !== 'Critical Care (ICU)').map((d) => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
@@ -603,34 +611,40 @@ export default function BookAppointment() {
                 </div>
 
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {timeSlots.map((s) => {
-                    const selected = form.timeSlot === s.label;
-                    const disabled = !s.available || isLoadingSlots;
-                    return (
-                      <button
-                        key={s.label}
-                        type="button"
-                        onClick={() => {
-                          if (disabled) return;
-                          setForm((prev) => ({ ...prev, timeSlot: s.label }));
-                          setErrors((prev) => ({ ...prev, timeSlot: undefined }));
-                        }}
-                        disabled={disabled}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{
-                          borderColor: selected ? '#1d4ed8' : '#e5e7eb',
-                          background: selected ? '#dbeafe' : '#f9fafb',
-                          color: selected ? '#1d4ed8' : '#64748b',
-                          textDecoration: !s.available ? 'line-through' : 'none',
-                        }}
-                        title={!s.available ? 'Unavailable' : 'Available'}
-                      >
-                        <MdAccessTime className="w-3.5 h-3.5" /> {s.label}
-                      </button>
-                    );
-                  })}
-                  {!isLoadingSlots && form.doctorId && timeSlots.length === 0 ? (
-                    <p className="text-xs text-gray-500">No slots available.</p>
+                  {timeSlots
+                    // Hide slots whose time has already passed today; keep the
+                    // currently selected one visible (e.g. while editing).
+                    .filter((s) => !s.past || s.label === form.timeSlot)
+                    .map((s) => {
+                      const selected = form.timeSlot === s.label;
+                      const disabled = !s.available || isLoadingSlots;
+                      return (
+                        <button
+                          key={s.label}
+                          type="button"
+                          onClick={() => {
+                            if (disabled) return;
+                            setForm((prev) => ({ ...prev, timeSlot: s.label }));
+                            setErrors((prev) => ({ ...prev, timeSlot: undefined }));
+                          }}
+                          disabled={disabled}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{
+                            borderColor: selected ? '#1d4ed8' : '#e5e7eb',
+                            background: selected ? '#dbeafe' : '#f9fafb',
+                            color: selected ? '#1d4ed8' : '#64748b',
+                            textDecoration: !s.available ? 'line-through' : 'none',
+                          }}
+                          title={s.booked ? 'Already booked' : !s.available ? 'Unavailable' : 'Available'}
+                        >
+                          <MdAccessTime className="w-3.5 h-3.5" /> {s.label}
+                        </button>
+                      );
+                    })}
+                  {!isLoadingSlots &&
+                  form.doctorId &&
+                  timeSlots.filter((s) => !s.past || s.label === form.timeSlot).length === 0 ? (
+                    <p className="text-xs text-gray-500">{slotsMessage || 'No slots available.'}</p>
                   ) : null}
                 </div>
                 {errors.timeSlot ? <p className="text-xs text-red-600 font-semibold mt-2">{errors.timeSlot}</p> : null}
@@ -696,7 +710,7 @@ export default function BookAppointment() {
                 </p>
               ) : null}
 
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-gray-600 block mb-1.5">Consultation Fee</label>
                   <input
@@ -750,7 +764,7 @@ export default function BookAppointment() {
                   type="button"
                   onClick={openConfirm}
                   className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:-translate-y-0.5 shadow hover:shadow-md disabled:opacity-50"
-                  style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}
+                  style={{ backgroundColor: '#0077B6' }}
                   disabled={isLoadingDoctors || isLoadingSlots}
                 >
                   <MdSave className="w-4 h-4" /> Confirm Appointment
@@ -826,7 +840,7 @@ export default function BookAppointment() {
               {success ? (
                 <div
                   className="rounded-2xl p-4 text-white shadow-sm border border-blue-900/10"
-                  style={{ background: 'linear-gradient(135deg, #0f2d5e 0%, #1a4a8a 60%, #1d4ed8 100%)' }}
+                  style={{ backgroundColor: '#0f2d5e' }}
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
@@ -897,7 +911,7 @@ export default function BookAppointment() {
                       resetForm();
                     }}
                     className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white shadow hover:shadow-md transition"
-                    style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}
+                    style={{ backgroundColor: '#0077B6' }}
                   >
                     Book Another
                   </button>
@@ -927,7 +941,7 @@ export default function BookAppointment() {
                     type="button"
                     onClick={submitAppointment}
                     className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white shadow hover:shadow-md transition disabled:opacity-60"
-                    style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}
+                    style={{ backgroundColor: '#0077B6' }}
                     disabled={submitLoading}
                   >
                     {submitLoading ? 'Saving…' : isEditMode ? 'Confirm Update' : 'Confirm Booking'}
@@ -941,3 +955,4 @@ export default function BookAppointment() {
     </div>
   );
 }
+

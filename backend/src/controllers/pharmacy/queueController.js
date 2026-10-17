@@ -140,7 +140,8 @@ async function listQueue(req, res) {
     const dayRange = day ? { gte: toStartOfDay(day), lte: toEndOfDay(day) } : null;
 
     const where = {
-      ...(status ? { status } : {}),
+      // Cancelled nurse/reception requests should never surface in the pharmacy queue.
+      status: status || { not: 'CANCELLED' },
       ...(dayRange ? { sentAt: dayRange } : {}),
       ...(q
         ? {
@@ -243,8 +244,17 @@ async function createQueueEntry(req, res) {
 
     if (!items.length) return res.status(400).json({ message: 'At least one valid medicine is required' });
 
-    const entry = await prisma.pharmacyQueue.create({
-      data: {
+    const include = {
+      patient: { select: { id: true, name: true, uhid: true, mobile: true, age: true, gender: true } },
+      doctor: { select: { id: true, user: { select: { name: true } } } },
+      appointment: { select: { id: true, department: true } },
+      sentByReceptionist: { select: { id: true, name: true } },
+      items: { orderBy: { createdAt: 'asc' } },
+    };
+
+    const upserted = await prisma.pharmacyQueue.upsert({
+      where: { tokenNumber },
+      create: {
         patientId,
         appointmentId: appointmentId || null,
         prescriptionId: prescriptionId || null,
@@ -264,16 +274,31 @@ async function createQueueEntry(req, res) {
           })),
         },
       },
-      include: {
-        patient: { select: { id: true, name: true, uhid: true, mobile: true, age: true, gender: true } },
-        doctor: { select: { id: true, user: { select: { name: true } } } },
-        appointment: { select: { id: true, department: true } },
-        sentByReceptionist: { select: { id: true, name: true } },
-        items: { orderBy: { createdAt: 'asc' } },
+      update: {
+        patientId,
+        appointmentId: appointmentId || null,
+        prescriptionId: prescriptionId || null,
+        doctorId: doctorId || null,
+        sentByReceptionistId: userId,
+        sentAt,
+        status: 'WAITING',
+        billedBillId: null,
+        items: {
+          deleteMany: {},
+          create: items.map((i) => ({
+            medicineId: i.medicineId,
+            medicineName: i.medicineName,
+            dosage: i.dosage,
+            frequency: i.frequency,
+            duration: i.duration,
+            quantity: i.quantity,
+          })),
+        },
       },
+      include,
     });
 
-    return res.status(201).json({ item: mapQueueRow(entry) });
+    return res.status(200).json({ item: mapQueueRow(upserted) });
   } catch (err) {
     // Unique tokenNumber clash
     if (err?.code === 'P2002') {

@@ -262,6 +262,16 @@
   transform: translateY(-1px);
 }
 
+.nurse-clinical-addRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.nurse-clinical-input--grow {
+  flex: 1;
+  min-width: 0;
+}
+
 .nurse-clinical-msg {
   font-size: 12px;
   font-weight: 700;

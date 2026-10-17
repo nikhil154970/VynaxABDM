@@ -12,6 +12,7 @@ const {
   applyAyushmanVisitBilling,
   applyAyushmanAppointmentBilling,
   applyAyushmanAdmissionBilling,
+  AYUSHMAN_PAYMENT_LABEL,
 } = require('../../../utils/ayushmanBilling');
 
 function normalizeString(v) {
@@ -188,7 +189,7 @@ function buildAdmissionSuggestedLines(admission) {
     const label = ward ? `Room charges (${days} day(s) · ${ward})` : `Room charges (${days} day(s))`;
     lines.push({ description: label, quantity: days, unitPrice: billing.roomChargePerDay });
   }
-  const suggestedDiscount = Math.max(0, billing.advance || 0);
+  const suggestedDiscount = 0;
   return { lines, suggestedDiscount };
 }
 
@@ -201,9 +202,9 @@ function aggregateBilledIpdPackageFromLineItems(allLineItems) {
   let billedRoomDays = 0;
   if (!Array.isArray(allLineItems)) return { admissionLineOnBill, billedRoomDays };
   for (const li of allLineItems) {
-    const desc = normalizeString(li.description);
-    if (desc === 'Admission charge' || desc.startsWith('Admission charge')) admissionLineOnBill = true;
-    if (desc.startsWith('Room charges')) {
+    const desc = normalizeString(li.description).toLowerCase();
+    if (desc === 'admission charge' || desc.startsWith('admission charge')) admissionLineOnBill = true;
+    if (desc.startsWith('room charges')) {
       billedRoomDays += Math.max(0, parseOptionalInt(li.quantity) || 0);
     }
   }
@@ -227,8 +228,7 @@ function buildIncrementalIpdPackageLines(admission, billedAdmission, billedRoomD
     const label = ward ? `Room charges (${extraDays} day(s) · ${ward})` : `Room charges (${extraDays} day(s))`;
     lines.push({ description: label, quantity: extraDays, unitPrice: billing.roomChargePerDay });
   }
-  const suggestedDiscount =
-    billedAdmission || billedRoomDays > 0 ? 0 : Math.max(0, billing.advance || 0);
+  const suggestedDiscount = 0;
   return { lines, suggestedDiscount };
 }
 
@@ -257,20 +257,66 @@ function extractLabTestsFromPrescription(prescription) {
     .map((name) => ({ testName: name, quantity: 1, price: 0 }));
 }
 
+function billPaidFromRecord(b) {
+  const paidRaw = Math.max(0, Number(b?.paidAmount) || 0);
+  const payments = Array.isArray(b?.payments) ? b.payments : [];
+  const paidByPayments = payments.reduce((s, p) => s + Math.max(0, Number(p?.amount) || 0), 0);
+  return Math.max(paidRaw, paidByPayments);
+}
+
+function billPendingFromRecord(b) {
+  const st = String(b?.status || '').toUpperCase();
+  if (st === 'CANCELLED') return 0;
+  const total = Math.max(0, Number(b?.totalAmount) || 0);
+  return Math.max(0, Math.round(total - billPaidFromRecord(b)));
+}
+
+/** Credit admission advance against bill pending (oldest bills first). */
+function applyAdmissionAdvanceToBills(bills, advanceRaw) {
+  let creditLeft = Math.max(0, Number(advanceRaw) || 0);
+  let outstandingTotal = 0;
+  const mapped = [];
+
+  for (const b of bills || []) {
+    const rawPending = billPendingFromRecord(b);
+    const credit = Math.min(creditLeft, rawPending);
+    creditLeft -= credit;
+    const pending = Math.max(0, rawPending - credit);
+    outstandingTotal += pending;
+    mapped.push({
+      bill: b,
+      rawPending,
+      pending,
+      advanceCredit: credit,
+    });
+  }
+
+  return { outstandingTotal, mapped, advanceCreditUsed: Math.max(0, Number(advanceRaw) || 0) - creditLeft };
+}
+
 function mapBillRow(b) {
-  const pending = Math.max(0, (b.totalAmount || 0) - (b.paidAmount || 0));
+  const paid = billPaidFromRecord(b);
+  const pending = billPendingFromRecord(b);
+  const department = b.appointment?.department || b.admission?.department || 'General';
+  const particulars = Array.isArray(b.lineItems)
+    ? b.lineItems.map((li) => li.description).join(', ')
+    : '';
+
   return {
     id: b.id,
     billNumber: b.billNumber,
+    patientId: b.patientId || b.patient?.id || null,
     patientName: b.patient?.name || '',
     uhid: b.patient?.uhid || '',
     visitType: b.visitType === 'IPD' ? 'IPD' : 'OPD',
     total: b.totalAmount,
-    paid: b.paidAmount,
+    paid,
     pending,
     paymentStatus: statusToUi(b.status),
     paymentMode: b.lastPaymentMode || '—',
     date: billDateToYmd(b.billDate),
+    department,
+    particulars,
   };
 }
 
@@ -405,6 +451,9 @@ async function listBills(req, res) {
         take: 500,
         include: {
           patient: { select: { id: true, name: true, uhid: true } },
+          appointment: { select: { department: true } },
+          admission: { select: { department: true } },
+          lineItems: { select: { description: true } },
         },
       }),
       computeGlobalSummary(),
@@ -447,6 +496,8 @@ async function getBillDetail(req, res) {
       patient: { select: { name: true, uhid: true, mobile: true } },
       lineItems: { orderBy: { createdAt: 'asc' } },
       payments: { orderBy: { createdAt: 'asc' } },
+      appointment: { select: { department: true } },
+      admission: { select: { department: true } },
     },
   });
   if (!b) return res.status(404).json({ message: 'Bill not found' });
@@ -579,9 +630,132 @@ async function getBillingContext(req, res) {
     const flatLines = admissionBillsFull.flatMap((b) => b.lineItems || []);
     const fromLines = aggregateBilledIpdPackageFromLineItems(flatLines);
     /** Admission fee is only on the first bill for this admission — any prior non-cancelled bill blocks it. */
-    const billedAdmission = admissionBillsFull.length > 0 || fromLines.admissionLineOnBill;
+    const billedAdmission = fromLines.admissionLineOnBill;
     const billedRoomDays = fromLines.billedRoomDays;
     ipdSuggest = buildIncrementalIpdPackageLines(admission, billedAdmission, billedRoomDays);
+
+    const admissionStart = admission.admissionDate;
+    const admissionEnd = admission.dischargeDate || new Date();
+
+    const pharmaStart = new Date(admissionStart.getTime() - 24 * 60 * 60 * 1000);
+    const pharmaEnd = new Date(admissionEnd.getTime() + 24 * 60 * 60 * 1000);
+
+    const otRequests = await prisma.otRequest.findMany({
+      where: { ipdId: admission.id },
+      select: { id: true },
+    });
+    const otRequestIds = otRequests.map((r) => r.id);
+
+    const [pharmacyBills, otIssues, completedTasks] = await Promise.all([
+      prisma.pharmacyBill.findMany({
+        where: {
+          patientId: admission.patientId,
+          status: { in: ['PENDING_PAYMENT', 'PARTIALLY_PAID', 'PAID'] },
+          createdAt: {
+            gte: pharmaStart,
+            lte: pharmaEnd,
+          },
+        },
+        include: {
+          items: true,
+        },
+      }),
+      prisma.otMedicineIssue.findMany({
+        where: {
+          OR: [
+            { otRequestId: { in: otRequestIds } },
+            {
+              patientId: admission.patientId,
+              createdAt: { gte: pharmaStart, lte: pharmaEnd },
+            },
+          ],
+          status: { in: ['ISSUED', 'IN_USE', 'RETURN_PENDING', 'CLOSED'] },
+        },
+        include: {
+          items: true,
+        },
+      }),
+      prisma.nurseTask.findMany({
+        where: {
+          admissionId: admission.id,
+          status: 'COMPLETED',
+        },
+      }),
+    ]);
+
+    const billedPharmacyBillNumbers = new Set();
+    const billedOtIssueNumbers = new Set();
+    const billedTaskIds = new Set();
+
+    for (const li of flatLines) {
+      const desc = String(li.description || '');
+      const pbMatch = desc.match(/\(Bill:\s*([a-z0-9\-]+)\)/i) || desc.match(/Pharmacy Bill:\s*([a-z0-9\-]+)/i);
+      if (pbMatch) {
+        billedPharmacyBillNumbers.add(pbMatch[1].trim().toUpperCase());
+      }
+      const otMatch = desc.match(/\(Issue:\s*([a-z0-9\-]+)\)/i) || desc.match(/OT Issue:\s*([a-z0-9\-]+)/i);
+      if (otMatch) {
+        billedOtIssueNumbers.add(otMatch[1].trim().toUpperCase());
+      }
+      const taskMatch = desc.match(/\(ID:\s*([a-f0-9\-]{36})\)/i) || desc.match(/Nursing Task:.*?\(ID:\s*([a-f0-9\-]{36})\)/i);
+      if (taskMatch) {
+        billedTaskIds.add(taskMatch[1].trim());
+      }
+    }
+
+    for (const pb of pharmacyBills) {
+      const bNumUpper = String(pb.billNumber || '').toUpperCase();
+      if (!billedPharmacyBillNumbers.has(bNumUpper)) {
+        for (const item of pb.items || []) {
+          ipdSuggest.lines.push({
+            description: `Pharmacy: ${item.medicineName} (Bill: ${pb.billNumber})`,
+            quantity: item.quantity,
+            unitPrice: Number(item.sellingPrice || item.mrp || 0),
+          });
+        }
+      }
+    }
+
+    for (const ot of otIssues) {
+      const otNumUpper = String(ot.issueNumber || '').toUpperCase();
+      if (!billedOtIssueNumbers.has(otNumUpper)) {
+        for (const item of ot.items || []) {
+          if (item.quantityUsed > 0) {
+            ipdSuggest.lines.push({
+              description: `OT: ${item.medicineName} (Issue: ${ot.issueNumber})`,
+              quantity: item.quantityUsed,
+              unitPrice: Number(item.unitPrice || 0),
+            });
+          }
+        }
+      }
+    }
+
+    for (const task of completedTasks) {
+      if (!billedTaskIds.has(task.id)) {
+        let unitPrice = 0;
+        const taskLower = task.task.toLowerCase();
+        if (taskLower.includes('bandage') || taskLower.includes('dressing')) {
+          unitPrice = 150;
+        } else if (taskLower.includes('injection') || taskLower.includes('inject')) {
+          unitPrice = 50;
+        } else if (taskLower.includes('nebulization') || taskLower.includes('nebulize')) {
+          unitPrice = 100;
+        } else if (taskLower.includes('catheter')) {
+          unitPrice = 200;
+        } else if (taskLower.includes('ecg')) {
+          unitPrice = 250;
+        } else {
+          unitPrice = 100; // default nominal nursing charge for completed tasks
+        }
+
+        ipdSuggest.lines.push({
+          description: `Nursing: ${task.task} (ID: ${task.id})`,
+          quantity: 1,
+          unitPrice,
+        });
+      }
+    }
 
     const currentBillDays = inclusiveAdmissionBillDays(admission.admissionDate);
     const br = admission.billing || {};
@@ -598,24 +772,16 @@ async function getBillingContext(req, res) {
     };
 
     if (admissionBillsFull.length > 0) {
-      const effectivePaid = (b) => {
-        const paidRaw = Math.max(0, b?.paidAmount || 0);
-        const payments = Array.isArray(b?.payments) ? b.payments : [];
-        const paidByPayments = payments.reduce((s, p) => s + Math.max(0, p?.amount || 0), 0);
-        return Math.max(paidRaw, paidByPayments);
-      };
-      const billPending = (b) => Math.max(0, (b?.totalAmount || 0) - effectivePaid(b));
-
-      const outstandingTotal = admissionBillsFull.reduce(
-        (s, b) => s + billPending(b),
-        0,
+      const effectivePaid = (b) => billPaidFromRecord(b);
+      const advanceCredit = Math.max(0, br.advance || 0);
+      const { outstandingTotal, mapped: billsWithCredit } = applyAdmissionAdvanceToBills(
+        admissionBillsFull,
+        advanceCredit,
       );
       const totalBilled = admissionBillsFull.reduce((s, b) => s + (b.totalAmount || 0), 0);
-      const totalPaid = admissionBillsFull.reduce((s, b) => s + effectivePaid(b), 0);
-      const allFullySettled = admissionBillsFull.every((b) => {
-        const st = String(b.status || '').toUpperCase();
-        return st === 'PAID' || effectivePaid(b) >= (b.totalAmount || 0);
-      });
+      const totalPaidOnBills = admissionBillsFull.reduce((s, b) => s + effectivePaid(b), 0);
+      const totalPaid = totalPaidOnBills + (advanceCredit > 0 ? Math.min(advanceCredit, totalBilled) : 0);
+      const allFullySettled = outstandingTotal <= 0;
       const paymentHistory = [];
       for (const b of admissionBillsFull) {
         for (const p of b.payments || []) {
@@ -636,14 +802,16 @@ async function getBillingContext(req, res) {
         outstandingTotal,
         totalBilled,
         totalPaid,
+        advanceCredit,
         allFullySettled,
         lastBillNumber: admissionBillsFull[admissionBillsFull.length - 1]?.billNumber || null,
-        bills: admissionBillsFull.map((b) => ({
+        bills: billsWithCredit.map(({ bill: b, pending, advanceCredit: credit }) => ({
           id: b.id,
           billNumber: b.billNumber,
           totalAmount: b.totalAmount,
           paidAmount: effectivePaid(b),
-          pending: billPending(b),
+          pending,
+          advanceCredit: credit,
           status: b.status,
           createdAt: b.createdAt,
         })),
@@ -817,6 +985,7 @@ async function createBill(req, res) {
   const notes = normalizeString(body.notes) || null;
   const appointmentId = normalizeString(body.appointmentId) || null;
   const admissionId = normalizeString(body.admissionId) || null;
+  console.log(`[CREATE BILL] patientId=${patientId}, visitType=${visitType}, appointmentId=${appointmentId}, admissionId=${admissionId}`);
   const initialPaid = Math.max(0, parseOptionalInt(body.initialPaid ?? body.paid) ?? 0);
   const initialMode = normalizeString(body.initialPaymentMode || body.paymentMode) || 'Cash';
 
@@ -840,7 +1009,7 @@ async function createBill(req, res) {
     return res.status(400).json({ message: 'Total must be greater than zero' });
   }
 
-  let paid0 = Math.min(initialPaid, totalAmount);
+  let paid0 = initialPaid;
   let status0 = computeBillStatus(paid0, totalAmount);
   let lastMode = paid0 > 0 ? initialMode : null;
   const discountFinal = discountAmount;
@@ -886,18 +1055,67 @@ async function createBill(req, res) {
 
         const billNumber = await allocateNextBillNumber(tx, billDate);
 
+        // IPD advance adjustment: apply any unused admission advance against this bill,
+        // so the bill reflects it as paid and the advance is consumed (not reused later).
+        let advanceApplied = 0;
+        let admissionBillingRow = null;
+        if (admissionId && visitType === 'IPD' && !ayushman) {
+          admissionBillingRow = await tx.admissionBilling.findUnique({
+            where: { admissionId },
+            select: { id: true, advance: true },
+          });
+          const advanceAvail = Math.max(0, Number(admissionBillingRow?.advance) || 0);
+          const gap = Math.max(0, totalAmount - paid0);
+          advanceApplied = Math.min(advanceAvail, gap);
+        }
+
+        const finalPaid = ayushman ? paid0 : paid0 + advanceApplied;
+        const finalStatus = ayushman ? status0 : computeBillStatus(finalPaid, totalAmount);
+        let finalLastMode = lastMode;
+        if (!ayushman) {
+          if (paid0 > 0) finalLastMode = initialMode;
+          else if (advanceApplied > 0) finalLastMode = 'Advance Adjustment';
+          else finalLastMode = null;
+        }
+
+        const paymentCreates = [];
+        if (ayushman) {
+          if (paid0 > 0) {
+            paymentCreates.push({
+              amount: paid0,
+              mode: lastMode,
+              note: normalizeString(body.paymentNote) || 'Ayushman Bharat',
+            });
+          }
+        } else {
+          if (paid0 > 0) {
+            paymentCreates.push({
+              amount: paid0,
+              mode: initialMode,
+              note: normalizeString(body.paymentNote) || null,
+            });
+          }
+          if (advanceApplied > 0) {
+            paymentCreates.push({
+              amount: advanceApplied,
+              mode: 'Advance Adjustment',
+              note: 'Advance adjusted from admission',
+            });
+          }
+        }
+
         const bill = await tx.bill.create({
           data: {
             billNumber,
             patientId,
             visitType,
-            status: status0,
+            status: finalStatus,
             subtotalAmount,
             discountAmount: discountFinal,
             taxAmount: taxFinal,
             totalAmount,
-            paidAmount: paid0,
-            lastPaymentMode: lastMode,
+            paidAmount: finalPaid,
+            lastPaymentMode: finalLastMode,
             notes: ayushman ? `${notes ? `${notes} · ` : ''}PAID BY AYUSHMAN` : notes,
             appointmentId,
             admissionId,
@@ -910,21 +1128,7 @@ async function createBill(req, res) {
                 lineTotal: l.lineTotal,
               })),
             },
-            ...(paid0 > 0
-              ? {
-                  payments: {
-                    create: [
-                      {
-                        amount: paid0,
-                        mode: ayushman ? lastMode : initialMode,
-                        note: ayushman
-                          ? normalizeString(body.paymentNote) || 'Ayushman Bharat'
-                          : normalizeString(body.paymentNote) || null,
-                      },
-                    ],
-                  },
-                }
-              : {}),
+            ...(paymentCreates.length ? { payments: { create: paymentCreates } } : {}),
           },
           select: {
             id: true,
@@ -934,6 +1138,14 @@ async function createBill(req, res) {
             status: true,
           },
         });
+
+        // Consume the applied advance so it isn't credited again on future bills.
+        if (advanceApplied > 0 && admissionBillingRow?.id) {
+          await tx.admissionBilling.update({
+            where: { id: admissionBillingRow.id },
+            data: { advance: Math.max(0, (Number(admissionBillingRow.advance) || 0) - advanceApplied) },
+          });
+        }
 
         const full = await tx.bill.findUnique({
           where: { id: bill.id },
@@ -1046,9 +1258,8 @@ async function addBillPayment(req, res) {
         const paidRaw = Math.max(0, bill.paidAmount || 0);
         const paidByPayments = (bill.payments || []).reduce((s, p) => s + Math.max(0, p?.amount || 0), 0);
         const effectivePaid = Math.max(paidRaw, paidByPayments);
-        const pending = Math.max(0, (bill.totalAmount || 0) - effectivePaid);
-        const pay = Math.min(amount, pending);
-        if (pay <= 0) throw Object.assign(new Error('NOTHING_TO_PAY'), { code: 400 });
+        const pay = amount;
+        if (pay <= 0) throw Object.assign(new Error('INVALID_AMOUNT'), { code: 400 });
 
         await tx.billPayment.create({
           data: { billId: bill.id, amount: pay, mode, note },
@@ -1089,11 +1300,503 @@ async function addBillPayment(req, res) {
   }
 }
 
+/** Classify a Bill row into a human bill "kind" for the unified ledger. */
+function classifyBillKind(b) {
+  if (b.otRequest) return 'OT';
+  if (Array.isArray(b.labOrders) && b.labOrders.length > 0) return 'LAB';
+  return b.visitType === 'IPD' ? 'IPD' : 'OPD';
+}
+
+function ledgerLabelForKind(kind, b) {
+  const dept = b.appointment?.department || b.admission?.department || '';
+  switch (kind) {
+    case 'OT':
+      return 'OT / Surgery bill';
+    case 'LAB':
+      return 'Lab tests bill';
+    case 'IPD':
+      return dept ? `IPD bill (${dept})` : 'IPD bill';
+    default:
+      return dept ? `OPD bill (${dept})` : 'OPD bill';
+  }
+}
+
+/**
+ * Unified patient billing ledger — one place that tracks EVERY charge for a patient:
+ * registration fee, OPD appointment fee, and all Bill records (OPD / IPD / OT / Lab),
+ * with per-item paid/pending and grand totals. Read-only aggregation.
+ */
+async function getPatientLedger(req, res) {
+  const patientId = normalizeString(req.query.patientId);
+  if (!patientId) return res.status(400).json({ message: 'patientId is required' });
+
+  try {
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { id: true, name: true, uhid: true, mobile: true },
+    });
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+    const sponsor = await getLatestPatientSponsor(prisma, patientId);
+    const ayushman = isAyushmanSponsor(sponsor);
+
+    const [visits, appointments, bills, admissions] = await Promise.all([
+      prisma.receptionVisit.findMany({
+        where: { patientId, registrationFee: { gt: 0 } },
+        orderBy: [{ visitDate: 'desc' }],
+        select: { id: true, registrationFee: true, paymentStatus: true, paymentMode: true, department: true, visitDate: true, visitType: true },
+      }),
+      prisma.appointment.findMany({
+        where: { patientId, fee: { gt: 0 } },
+        orderBy: [{ date: 'desc' }],
+        select: { id: true, opdNumber: true, fee: true, paymentStatus: true, paymentMode: true, department: true, date: true },
+      }),
+      prisma.bill.findMany({
+        where: { patientId, NOT: { status: 'CANCELLED' } },
+        orderBy: [{ billDate: 'desc' }],
+        select: {
+          id: true,
+          billNumber: true,
+          visitType: true,
+          status: true,
+          totalAmount: true,
+          paidAmount: true,
+          lastPaymentMode: true,
+          billDate: true,
+          appointmentId: true,
+          admissionId: true,
+          payments: { select: { amount: true } },
+          lineItems: { select: { description: true, quantity: true } },
+          appointment: { select: { department: true } },
+          admission: { select: { department: true } },
+          otRequest: { select: { id: true } },
+          labOrders: { select: { id: true } },
+        },
+      }),
+      prisma.admission.findMany({
+        where: {
+          patientId,
+          dischargeDate: null,
+          status: { in: ['ADMITTED', 'UNDER_TREATMENT', 'READY_FOR_DISCHARGE', 'DISCHARGE_REQUESTED'] },
+          billing: { isNot: null },
+        },
+        orderBy: [{ admissionDate: 'desc' }],
+        include: { ward: { select: { name: true } }, billing: true },
+      }),
+    ]);
+
+    // An appointment's consultation fee is only "represented" by a bill when that bill is an actual
+    // OPD/IPD consultation bill. Lab & OT bills are frequently linked to the appointment purely for
+    // department context and do NOT include the consultation fee — so those must NOT suppress the
+    // separate appointment (consultation) fee entry.
+    const billedAppointmentIds = new Set(
+      bills
+        .filter((b) => {
+          const kind = classifyBillKind(b);
+          return kind === 'OPD' || kind === 'IPD';
+        })
+        .map((b) => b.appointmentId)
+        .filter(Boolean),
+    );
+
+    const entries = [];
+
+    for (const v of visits) {
+      const total = Math.max(0, Number(v.registrationFee) || 0);
+      const paid = ayushman || isPaidStatus(v.paymentStatus) ? total : 0;
+      const pending = Math.max(0, total - paid);
+      entries.push({
+        kind: 'REGISTRATION',
+        ref: 'Registration',
+        label: v.department ? `Registration fee (${v.department})` : 'Registration fee',
+        date: billDateToYmd(v.visitDate),
+        total,
+        paid,
+        pending,
+        status: pending <= 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Pending',
+        mode: ayushman ? AYUSHMAN_PAYMENT_LABEL : v.paymentMode || '—',
+        billId: null,
+        particulars: 'Registration / visit fee',
+      });
+    }
+
+    for (const a of appointments) {
+      if (billedAppointmentIds.has(a.id)) continue;
+      const total = Math.max(0, Number(a.fee) || 0);
+      const paid = ayushman || isPaidStatus(a.paymentStatus) ? total : 0;
+      const pending = Math.max(0, total - paid);
+      entries.push({
+        kind: 'APPOINTMENT',
+        ref: a.opdNumber || 'OPD',
+        label: a.department ? `OPD consultation (${a.department})` : 'OPD consultation',
+        date: billDateToYmd(a.date),
+        total,
+        paid,
+        pending,
+        status: pending <= 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Pending',
+        mode: ayushman ? AYUSHMAN_PAYMENT_LABEL : a.paymentMode || '—',
+        billId: null,
+        particulars: 'Doctor consultation fee',
+      });
+    }
+
+    for (const b of bills) {
+      const kind = classifyBillKind(b);
+      const total = Math.max(0, Number(b.totalAmount) || 0);
+      const paid = ayushman ? total : billPaidFromRecord(b);
+      const pending = ayushman ? 0 : Math.max(0, total - paid);
+      entries.push({
+        kind,
+        ref: b.billNumber,
+        label: ledgerLabelForKind(kind, b),
+        date: billDateToYmd(b.billDate),
+        total,
+        paid,
+        pending,
+        status: pending <= 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Pending',
+        mode: ayushman ? AYUSHMAN_PAYMENT_LABEL : b.lastPaymentMode || '—',
+        billId: b.id,
+        particulars: Array.isArray(b.lineItems) ? b.lineItems.map((li) => li.description).join(', ') : '',
+      });
+    }
+
+    // IPD admission package (admission + room charges) & advance live on AdmissionBilling, not on a Bill.
+    // Surface the un-billed accrued package + the advance the patient paid so IPD shows up in the ledger.
+    for (const adm of admissions) {
+      const billing = adm.billing;
+      if (!billing) continue;
+
+      const admissionLines = bills
+        .filter((b) => b.admissionId === adm.id)
+        .flatMap((b) => b.lineItems || []);
+      const { admissionLineOnBill, billedRoomDays } = aggregateBilledIpdPackageFromLineItems(admissionLines);
+      const incremental = buildIncrementalIpdPackageLines(adm, admissionLineOnBill, billedRoomDays);
+      const unbilled = incremental.lines.reduce((s, li) => s + Math.max(0, (li.quantity || 0) * (li.unitPrice || 0)), 0);
+
+      let advance = Math.max(0, Number(billing.advance) || 0);
+      const ward = adm.ward?.name ? String(adm.ward.name) : '';
+
+      if (unbilled > 0) {
+        const total = unbilled;
+        const paid = ayushman ? total : Math.min(advance, total);
+        advance -= paid;
+        const pending = ayushman ? 0 : Math.max(0, total - paid);
+        const days = inclusiveAdmissionBillDays(adm.admissionDate);
+        entries.push({
+          kind: 'IPD',
+          ref: adm.ipdNumber || 'IPD',
+          label: ward ? `IPD room & admission charges (${ward})` : 'IPD room & admission charges',
+          date: billDateToYmd(new Date()),
+          total,
+          paid,
+          pending,
+          status: pending <= 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Pending',
+          mode: ayushman ? AYUSHMAN_PAYMENT_LABEL : billing.paymentMode || (paid > 0 ? 'Advance' : '—'),
+          billId: null,
+          admissionId: adm.id,
+          particulars: `Admission + room charges (${days} day(s) so far) — not yet finalised`,
+        });
+      }
+
+      if (!ayushman && advance > 0) {
+        entries.push({
+          kind: 'ADVANCE',
+          ref: adm.ipdNumber || 'IPD',
+          label: 'IPD advance (credit)',
+          date: billDateToYmd(adm.admissionDate),
+          total: advance,
+          paid: advance,
+          pending: 0,
+          status: 'Paid',
+          mode: billing.paymentMode || 'Advance',
+          billId: null,
+          particulars: 'Advance paid at admission — adjustable against IPD bills',
+        });
+      }
+    }
+
+    // ── Pharmacy charges ─────────────────────────────────────────────
+    // Pharmacy bills are their own bills (PharmacyBill) with their own paid/pending.
+    // Surface them so the final bill reflects pharmacy charges. Prefer the admission link;
+    // fall back to legacy hospital-patient bills not yet linked to an admission.
+    const admissionIds = admissions.map((a) => a.id);
+    const pharmacyBills = await prisma.pharmacyBill.findMany({
+      where: {
+        NOT: { status: 'CANCELLED' },
+        OR: [
+          ...(admissionIds.length ? [{ admissionId: { in: admissionIds } }] : []),
+          { patientId, admissionId: null, billingType: 'HOSPITAL_PATIENT' },
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      include: { items: { select: { medicineName: true, quantity: true } } },
+    });
+    for (const pb of pharmacyBills) {
+      const total = Math.max(0, Math.round(Number(pb.grandTotal) || 0));
+      const paid = ayushman ? total : Math.max(0, Math.round(Number(pb.paidAmount) || 0));
+      const pending = ayushman ? 0 : Math.max(0, Math.round(Number(pb.pendingAmount ?? total - paid)));
+      entries.push({
+        kind: 'PHARMACY',
+        ref: pb.billNumber,
+        label: 'Pharmacy medicines',
+        date: billDateToYmd(pb.createdAt),
+        total,
+        paid,
+        pending,
+        status: pending <= 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Pending',
+        mode: ayushman ? AYUSHMAN_PAYMENT_LABEL : pb.paymentMode || '—',
+        billId: null,
+        pharmacyBillId: pb.id,
+        particulars: Array.isArray(pb.items)
+          ? pb.items.map((it) => `${it.medicineName} x${it.quantity}`).join(', ')
+          : '',
+      });
+    }
+
+    // ── Nursing daily expenses (accrued, roll into final IPD bill) ────
+    const dailyExpenses = admissionIds.length
+      ? await prisma.dailyExpense.findMany({
+          where: { admissionId: { in: admissionIds } },
+          orderBy: [{ createdAt: 'desc' }],
+        })
+      : [];
+    for (const ex of dailyExpenses) {
+      const total = Math.max(0, Number(ex.amount) || 0);
+      if (total <= 0) continue;
+      const paid = ayushman ? total : 0;
+      const pending = ayushman ? 0 : total;
+      entries.push({
+        kind: 'EXPENSE',
+        ref: 'Nursing',
+        label: ex.description || 'Nursing daily expense',
+        date: billDateToYmd(ex.expenseDate || ex.createdAt),
+        total,
+        paid,
+        pending,
+        status: pending <= 0 ? 'Paid' : 'Pending',
+        mode: ayushman ? AYUSHMAN_PAYMENT_LABEL : '—',
+        billId: null,
+        particulars: `${ex.category ? `${ex.category} · ` : ''}${ex.quantity} × ₹${ex.unitPrice}`,
+      });
+    }
+
+    entries.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+    const totals = entries.reduce(
+      (acc, e) => {
+        acc.billed += e.total;
+        acc.paid += e.paid;
+        acc.pending += e.pending;
+        return acc;
+      },
+      { billed: 0, paid: 0, pending: 0 },
+    );
+
+    return res.json({
+      patient: { id: patient.id, uhid: patient.uhid, name: patient.name, mobile: patient.mobile || '' },
+      sponsor,
+      sponsorLabel: sponsorDisplayLabel(sponsor),
+      isAyushman: ayushman,
+      // Most-recent active admission (if any) — lets the frontend fetch the pharmacy billing details.
+      admissionId: admissions[0]?.id || null,
+      admissionIds,
+      totals,
+      entries,
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[getPatientLedger]', e?.message || e);
+    return res.status(500).json({ message: 'Could not load patient billing ledger' });
+  }
+}
+
+/**
+ * Read-only Pharmacy Billing Details for reception — every pharmacy-billed medicine
+ * for a patient's IPD admission (Bill No, Date, Medicine, Qty, Rate, Amount, Status),
+ * in chronological order. Only pharmacy-billed medicines; never pending nurse requests.
+ */
+async function getAdmissionPharmacyBills(req, res) {
+  const patientId = normalizeString(req.query.patientId);
+  const admissionId = normalizeString(req.query.admissionId);
+  if (!patientId && !admissionId) {
+    return res.status(400).json({ message: 'patientId or admissionId is required' });
+  }
+
+  try {
+    const orClauses = [];
+    if (admissionId) orClauses.push({ admissionId });
+    if (patientId) orClauses.push({ patientId, admissionId: null, billingType: 'HOSPITAL_PATIENT' });
+
+    const bills = await prisma.pharmacyBill.findMany({
+      where: {
+        NOT: { status: 'CANCELLED' },
+        OR: orClauses,
+      },
+      orderBy: [{ createdAt: 'asc' }],
+      include: { items: { orderBy: { medicineName: 'asc' } } },
+    });
+
+    const rows = [];
+    let totalAmount = 0;
+    let totalPaid = 0;
+    let totalPending = 0;
+    for (const b of bills) {
+      const billTotal = Math.max(0, Math.round(Number(b.grandTotal) || 0));
+      const billPaid = Math.max(0, Math.round(Number(b.paidAmount) || 0));
+      const billPending = Math.max(0, Math.round(Number(b.pendingAmount ?? billTotal - billPaid)));
+      totalAmount += billTotal;
+      totalPaid += billPaid;
+      totalPending += billPending;
+      for (const it of b.items || []) {
+        const rate = Math.round(Number(it.sellingPrice ?? it.mrp) || 0);
+        const amount = Math.round(Number(it.amount) || 0);
+        rows.push({
+          billNumber: b.billNumber,
+          date: billDateToYmd(b.createdAt),
+          medicine: it.medicineName,
+          quantity: it.quantity,
+          rate,
+          amount,
+          status: b.status,
+        });
+      }
+    }
+
+    return res.json({
+      rows,
+      totals: { amount: totalAmount, paid: totalPaid, pending: totalPending },
+      billCount: bills.length,
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[getAdmissionPharmacyBills]', e?.message || e);
+    return res.status(500).json({ message: 'Could not load pharmacy billing details' });
+  }
+}
+
+/**
+ * Collect against the accrued IPD package (admission + room charges) that lives on AdmissionBilling
+ * and has no Bill yet. This finalises the un-billed package into a real Bill, applies any admission
+ * advance, records the collected amount, and returns the bill so a slip can be printed.
+ */
+async function collectAdmissionPackage(req, res) {
+  const admissionId = normalizeString(req.params.admissionId);
+  const body = req.body || {};
+  const amount = Math.max(0, parseOptionalInt(body.amount) || 0);
+  const mode = normalizeString(body.mode || body.paymentMode) || 'Cash';
+  if (!admissionId) return res.status(400).json({ message: 'admissionId is required' });
+
+  try {
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const admission = await tx.admission.findUnique({
+          where: { id: admissionId },
+          include: { ward: { select: { name: true } }, billing: true },
+        });
+        if (!admission) throw Object.assign(new Error('ADMISSION_NOT_FOUND'), { code: 404 });
+        if (!admission.billing) throw Object.assign(new Error('NO_BILLING'), { code: 400 });
+
+        const patientId = admission.patientId;
+        const sponsor = await getLatestPatientSponsor(tx, patientId);
+        const ayushman = isAyushmanSponsor(sponsor);
+
+        const admissionBills = await tx.bill.findMany({
+          where: { admissionId, NOT: { status: 'CANCELLED' } },
+          select: { lineItems: { select: { description: true, quantity: true } } },
+        });
+        const flatLines = admissionBills.flatMap((b) => b.lineItems || []);
+        const { admissionLineOnBill, billedRoomDays } = aggregateBilledIpdPackageFromLineItems(flatLines);
+        const incremental = buildIncrementalIpdPackageLines(admission, admissionLineOnBill, billedRoomDays);
+        const lines = incremental.lines.map((l) => ({
+          description: l.description,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          lineTotal: Math.max(0, (l.quantity || 0) * (l.unitPrice || 0)),
+        }));
+        const subtotalAmount = lines.reduce((s, l) => s + l.lineTotal, 0);
+        if (subtotalAmount <= 0) throw Object.assign(new Error('NOTHING_TO_BILL'), { code: 400 });
+        const totalAmount = subtotalAmount;
+
+        const billDate = new Date();
+        const billNumber = await allocateNextBillNumber(tx, billDate);
+
+        const advanceAvail = Math.max(0, Number(admission.billing.advance) || 0);
+        const paidCash = ayushman ? 0 : Math.min(amount, totalAmount);
+        const gapAfterCash = Math.max(0, totalAmount - paidCash);
+        const advanceApplied = ayushman ? 0 : Math.min(advanceAvail, gapAfterCash);
+        const finalPaid = ayushman ? totalAmount : paidCash + advanceApplied;
+        const finalStatus = computeBillStatus(finalPaid, totalAmount);
+
+        const paymentCreates = [];
+        if (ayushman) {
+          paymentCreates.push({ amount: totalAmount, mode: AYUSHMAN_PAYMENT_LABEL, note: 'Ayushman Bharat' });
+        } else {
+          if (paidCash > 0) paymentCreates.push({ amount: paidCash, mode, note: 'IPD room & admission charges' });
+          if (advanceApplied > 0) {
+            paymentCreates.push({ amount: advanceApplied, mode: 'Advance Adjustment', note: 'Advance adjusted from admission' });
+          }
+        }
+
+        const bill = await tx.bill.create({
+          data: {
+            billNumber,
+            patientId,
+            visitType: 'IPD',
+            status: finalStatus,
+            subtotalAmount,
+            discountAmount: 0,
+            taxAmount: 0,
+            totalAmount,
+            paidAmount: finalPaid,
+            lastPaymentMode: ayushman ? AYUSHMAN_PAYMENT_LABEL : paidCash > 0 ? mode : advanceApplied > 0 ? 'Advance Adjustment' : null,
+            notes: ayushman ? 'PAID BY AYUSHMAN' : null,
+            admissionId,
+            billDate,
+            lineItems: { create: lines },
+            ...(paymentCreates.length ? { payments: { create: paymentCreates } } : {}),
+          },
+          include: { patient: { select: { name: true, uhid: true } } },
+        });
+
+        if (advanceApplied > 0) {
+          await tx.admissionBilling.update({
+            where: { id: admission.billing.id },
+            data: { advance: Math.max(0, advanceAvail - advanceApplied) },
+          });
+        }
+
+        await syncAdmissionBillingRow(tx, bill);
+        return bill;
+      },
+      { maxWait: 10000, timeout: 25000 },
+    );
+
+    const ayushmanIds = await loadAyushmanPatientIdSet(prisma, [result.patientId]);
+    const row = ayushmanIds.has(result.patientId) ? applyAyushmanToBillRow(mapBillRow(result)) : mapBillRow(result);
+    const receiptId =
+      (result.paidAmount || 0) > 0
+        ? `RCPT-${String(result.billNumber || '').replace(/\D/g, '').slice(-8)}${Date.now().toString(36).slice(-4)}`
+        : null;
+
+    return res.status(201).json({ ok: true, bill: row, receiptId });
+  } catch (e) {
+    if (e && e.message === 'ADMISSION_NOT_FOUND') return res.status(404).json({ message: 'Admission not found' });
+    if (e && e.message === 'NO_BILLING') return res.status(400).json({ message: 'No admission billing configured' });
+    if (e && e.message === 'NOTHING_TO_BILL') return res.status(400).json({ message: 'No pending IPD room / admission charges to bill' });
+    // eslint-disable-next-line no-console
+    console.error('[collectAdmissionPackage]', e?.message || e);
+    return res.status(500).json({ message: 'Could not collect IPD charges' });
+  }
+}
+
 module.exports = {
   listBills,
   getBillDetail,
   getBillingContext,
   listPatientPayments,
+  getPatientLedger,
+  getAdmissionPharmacyBills,
+  collectAdmissionPackage,
   createBill,
   addBillPayment,
 };

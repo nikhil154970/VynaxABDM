@@ -1,14 +1,36 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
-import { MdAccessTime } from 'react-icons/md';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { MdAccessTime, MdNotifications } from 'react-icons/md';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from './ConfirmModal';
+import api from '../utils/api';
 
 const NURSE_IPD_DETAILS_UUID = /^\/dashboard\/nurse\/ipd\/details\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i;
 const NURSE_IPD_DETAILS_SEARCH = /^\/dashboard\/nurse\/ipd\/details\/?$/;
 
 function titleFromPath(pathname) {
-  const p = String(pathname || '');
+  const p = String(pathname || '').trim();
+  
+  // Explicit HR titles mapping
+  const hrMap = {
+    '/dashboard/hr': 'HR Dashboard',
+    '/dashboard/hr/employees/departments': 'Department Registry',
+    '/dashboard/hr/staff-allocation/requests': 'Staff Allocation Requests',
+    '/dashboard/hr/staff-allocation/patient': 'Patient Staff Allocation',
+    '/dashboard/hr/staff-allocation/nurse': 'Nurse Allocation',
+    '/dashboard/hr/shifts': 'Shift Management',
+    '/dashboard/hr/shifts/availability': 'Staff Availability',
+    '/dashboard/hr/duty-roster': 'Duty Roster',
+    '/dashboard/hr/reports': 'Workforce Reports',
+    '/dashboard/hr/notifications': 'System Notifications',
+  };
+
+  if (p === '/dashboard/hr/employees') return 'Employee Registry';
+  if (p.startsWith('/dashboard/hr/employees/')) return 'Employee Profile';
+  
+  const hrHit = Object.keys(hrMap).find(key => p === key);
+  if (hrHit) return hrMap[hrHit];
+
   if (NURSE_IPD_DETAILS_SEARCH.test(p)) return 'Update patient record';
   if (NURSE_IPD_DETAILS_UUID.test(p)) {
     try {
@@ -19,6 +41,9 @@ function titleFromPath(pathname) {
     }
     return 'Update patient record';
   }
+
+  if (p === '/dashboard/doctor/appointments/today') return 'Today Appointments';
+  if (p === '/dashboard/admin/abdm/consents') return 'ABDM Consent Management';
 
   const parts = p.split('/').filter(Boolean).slice(2); // drop "dashboard/{role}"
 
@@ -45,6 +70,29 @@ export default function AdminHeader() {
     month: 'long',
     day: 'numeric',
   });
+
+  const [notifications, setNotifications] = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const lastNotifRef = useRef('');
+
+  const fetchHeaderNotifications = async () => {
+    try {
+      const res = await api.get('/notifications?limit=5');
+      const list = res.data?.notifications || [];
+      const key = JSON.stringify(list.map((n) => n.id));
+      if (key === lastNotifRef.current) return; // nothing changed → skip re-render
+      lastNotifRef.current = key;
+      setNotifications(list);
+      setUnreadCount(list.filter((n) => !n.read_at).length);
+    } catch (err) {
+      console.error('Header notifications fetch failed:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchHeaderNotifications();
+  }, []);
 
   useEffect(() => {
     const onUhid = () => setNurseDetailUhidTick((t) => t + 1);
@@ -94,20 +142,14 @@ export default function AdminHeader() {
   return (
     <>
       <div
-        className={`sticky top-0 z-30 border-b border-gray-200 px-4 md:px-6 ${isPharmacy ? 'py-4' : 'py-3'}`}
+        className={`sticky top-0 z-30 px-4 md:px-6 ${isPharmacy ? 'py-4' : 'py-3'}`}
         style={{
-          background: isPharmacy ? '#ffffff' : 'rgba(255,255,255,0.92)',
-          backdropFilter: 'blur(10px)',
+          background: '#FFFFFF',
+          borderBottom: '1px solid #D6E8EE',
         }}
       >
         <div className="flex items-center justify-between gap-3 pl-10 md:pl-0">
           <div className="min-w-0 flex-1">
-            <p
-              className={`${isPharmacy ? 'text-sm font-extrabold' : 'text-xs font-extrabold tracking-wide'} hidden md:block`}
-              style={{ color: isDoctor ? '#2D2A6E' : '#1d4ed8' }}
-            >
-              New H T Hospital HIMS
-            </p>
             <h1
               className={`${
                 isPharmacy ? 'text-2xl font-black leading-tight' : 'text-base md:text-lg font-extrabold'
@@ -140,6 +182,103 @@ export default function AdminHeader() {
             )}
 
             <div className="flex items-center gap-2 md:gap-3">
+              {/* Notification Bell Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  className="p-1.5 text-gray-500 hover:text-gray-700 transition relative rounded-xl"
+                  style={{ color: '#00B4D8' }}
+                  onClick={() => setDropdownOpen((prev) => !prev)}
+                  title="Notifications"
+                >
+                  <MdNotifications className="w-5.5 h-5.5 md:w-6 md:h-6" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  )}
+                </button>
+
+                {dropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl border border-gray-100 shadow-xl z-50 overflow-hidden font-sans">
+                      <div className="px-4 py-3 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
+                        <span className="text-xs font-extrabold text-[#001B48]">Recent Notifications</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDropdownOpen(false);
+                            let rolePath = isDoctor ? 'doctor' : isPharmacy ? 'pharmacy' : normalizedRole;
+                            if (rolePath === 'hr_manager') rolePath = 'hr';
+                            if (rolePath === 'super_admin') {
+                              navigate('/dashboard/admin/alerts/system');
+                            } else {
+                              navigate(`/dashboard/${rolePath}/notifications`);
+                            }
+                          }}
+                          className="text-[10px] font-bold text-[#0077B6] hover:underline"
+                        >
+                          View All
+                        </button>
+                      </div>
+
+                      <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-gray-400 font-semibold">
+                            No notifications
+                          </div>
+                        ) : (
+                          notifications.map((n) => (
+                            <div
+                              key={n.id}
+                              onClick={async () => {
+                                if (!n.read_at) {
+                                  try {
+                                    await api.patch(`/notifications/${n.id}/read`);
+                                    setNotifications((prev) =>
+                                      prev.map((x) =>
+                                        x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x
+                                      )
+                                    );
+                                    setUnreadCount((c) => Math.max(0, c - 1));
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }
+                              }}
+                              className={`p-3 text-left transition hover:bg-gray-50 cursor-pointer ${
+                                !n.read_at ? 'bg-blue-50/10' : ''
+                              }`}
+                            >
+                              <div className="flex justify-between items-start gap-2">
+                                <p className={`text-xs ${!n.read_at ? 'font-bold text-[#001B48]' : 'font-semibold text-gray-700'} truncate flex-1`}>
+                                  {n.title}
+                                </p>
+                                {!n.read_at && (
+                                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 shrink-0" />
+                                )}
+                              </div>
+                              <p className="text-[11px] text-gray-500 font-semibold line-clamp-2 mt-0.5 leading-relaxed">
+                                {n.message}
+                              </p>
+                              <span className="text-[9px] text-gray-400 font-bold block mt-1">
+                                {n.created_at
+                                  ? new Date(n.created_at).toLocaleString('en-IN', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })
+                                  : ''}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <div className="text-right leading-tight">
                 {isPharmacy ? (
                   <p className="inline-flex max-w-[120px] items-center justify-end truncate text-xs font-black text-gray-900 md:max-w-none md:text-sm">
@@ -167,7 +306,7 @@ export default function AdminHeader() {
                 type="button"
                 onClick={() => setConfirmOpen(true)}
                 className="text-xs md:text-sm text-gray-600 hover:text-red-600 border px-2 md:px-3 py-1.5 md:py-2 rounded-xl transition bg-white whitespace-nowrap shadow-sm"
-                style={{ borderColor: 'rgba(0,0,0,0.12)' }}
+                style={{ borderColor: '#e0e7ff' }}
               >
                 Logout
               </button>

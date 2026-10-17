@@ -315,15 +315,31 @@ const getBillingStats = async (req, res) => {
         where: {
           createdAt: { gte: start, lte: end },
           status: { in: ['PAID', 'PARTIALLY_PAID'] },
+          NOT: { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
         },
         _sum: { grandTotal: true },
         _count: true,
       }),
-      prisma.pharmacyBill.count({ where: { NOT: { status: 'CANCELLED' } } }),
       prisma.pharmacyBill.count({
-        where: { status: { in: ['PENDING_PAYMENT', 'PARTIALLY_PAID'] } },
+        where: {
+          NOT: [
+            { status: 'CANCELLED' },
+            { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
+          ],
+        },
       }),
-      prisma.pharmacyBill.count({ where: { status: 'CANCELLED' } }),
+      prisma.pharmacyBill.count({
+        where: {
+          status: { in: ['PENDING_PAYMENT', 'PARTIALLY_PAID'] },
+          NOT: { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
+        },
+      }),
+      prisma.pharmacyBill.count({
+        where: {
+          status: 'CANCELLED',
+          NOT: { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
+        },
+      }),
     ]);
 
     return res.json({
@@ -343,7 +359,12 @@ const getBillingStats = async (req, res) => {
 
 const getBills = async (req, res) => {
   try {
-    const where = {};
+    const where = {
+      OR: [
+        { status: 'DRAFT' },
+        { NOT: { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } } },
+      ],
+    };
     const status = normalizeString(req.query.status);
     if (status && status !== 'all') {
       const map = {
@@ -381,15 +402,31 @@ const getBills = async (req, res) => {
         where: {
           createdAt: { gte: start, lte: end },
           status: { in: ['PAID', 'PARTIALLY_PAID'] },
+          NOT: { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
         },
         _sum: { grandTotal: true },
         _count: true,
       }),
-      prisma.pharmacyBill.count({ where: { NOT: { status: 'CANCELLED' } } }),
       prisma.pharmacyBill.count({
-        where: { status: { in: ['PENDING_PAYMENT', 'PARTIALLY_PAID'] } },
+        where: {
+          NOT: [
+            { status: 'CANCELLED' },
+            { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
+          ],
+        },
       }),
-      prisma.pharmacyBill.count({ where: { status: 'CANCELLED' } }),
+      prisma.pharmacyBill.count({
+        where: {
+          status: { in: ['PENDING_PAYMENT', 'PARTIALLY_PAID'] },
+          NOT: { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
+        },
+      }),
+      prisma.pharmacyBill.count({
+        where: {
+          status: 'CANCELLED',
+          NOT: { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
+        },
+      }),
     ]);
 
     return res.json({
@@ -537,12 +574,35 @@ const createBill = async (req, res) => {
       }
       const patient = await prisma.patient.findUnique({ where: { id: patientId } });
       if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+      // Prefer an explicit admission (e.g. carried from the nurse IPD medicine request /
+      // pharmacy queue), otherwise fall back to any currently-open admission for the patient.
+      const explicitAdmissionId =
+        body.admissionId && isUuid(String(body.admissionId)) ? String(body.admissionId) : null;
+      const activeAdmission = await prisma.admission.findFirst({
+        where: {
+          patientId: patient.id,
+          ...(explicitAdmissionId
+            ? { id: explicitAdmissionId }
+            : { status: { in: ['ADMITTED', 'UNDER_TREATMENT', 'READY_FOR_DISCHARGE', 'DISCHARGE_REQUESTED'] } }),
+        },
+        orderBy: { admissionDate: 'desc' },
+      });
+
+      let tokenNumber = normalizeString(body.tokenNumber);
+      if (activeAdmission && !/^IPD/i.test(tokenNumber)) {
+        tokenNumber = `IPD-${tokenNumber}`.replace(/-$/, '');
+      }
+
       patientSnapshot = {
         patientId: patient.id,
+        // Save every billed medicine against the patient's IPD admission so reception can
+        // fetch all pharmacy charges for that admission directly.
+        admissionId: activeAdmission ? activeAdmission.id : null,
         patientName: patient.name,
         patientUhid: patient.uhid || '',
         customerMobile: patient.mobile || normalizeString(body.customerMobile),
-        tokenNumber: normalizeString(body.tokenNumber),
+        tokenNumber,
         doctorName: normalizeString(body.doctorName),
         department: normalizeString(body.department),
         visitDate: body.visitDate ? new Date(body.visitDate) : null,
@@ -687,9 +747,23 @@ const updateBill = async (req, res) => {
           await tx.pharmacyBillItem.deleteMany({ where: { billId: existing.id } });
         }
 
+        let tokenNumber = existing.tokenNumber;
+        if (existing.patientId) {
+          const activeAdmission = await tx.admission.findFirst({
+            where: {
+              patientId: existing.patientId,
+              status: { in: ['ADMITTED', 'DISCHARGE_REQUESTED'] },
+            },
+          });
+          if (activeAdmission && !/^IPD/i.test(tokenNumber || '')) {
+            tokenNumber = `IPD-${tokenNumber || ''}`.replace(/-$/, '');
+          }
+        }
+
         const updated = await tx.pharmacyBill.update({
           where: { id: existing.id },
           data: {
+            tokenNumber,
             subTotal: totals.subTotal,
             discount: totals.discount,
             gstAmount: totals.gstAmount,
@@ -823,6 +897,32 @@ const getBillPrint = async (req, res) => {
   }
 };
 
+const deleteBill = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isUuid(id)) return res.status(400).json({ message: 'Invalid bill id' });
+
+    const existing = await prisma.pharmacyBill.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!existing) return res.status(404).json({ message: 'Bill not found' });
+    if (existing.status !== 'DRAFT') {
+      return res.status(400).json({ message: 'Only draft bills can be deleted' });
+    }
+
+    await prisma.$transaction([
+      prisma.pharmacyBillItem.deleteMany({ where: { billId: id } }),
+      prisma.pharmacyBill.delete({ where: { id } }),
+    ]);
+
+    return res.json({ message: 'Draft bill deleted successfully' });
+  } catch (err) {
+    console.error('[pharmacy/billing] delete', err);
+    return res.status(500).json({ message: err?.message || 'Failed to delete draft bill' });
+  }
+};
+
 module.exports = {
   searchInventory,
   searchPatients,
@@ -834,4 +934,5 @@ module.exports = {
   cancelBill,
   getPatientDues,
   getBillPrint,
+  deleteBill,
 };

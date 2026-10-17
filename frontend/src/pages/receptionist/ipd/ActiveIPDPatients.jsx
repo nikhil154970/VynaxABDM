@@ -16,15 +16,11 @@ import {
   MdSwapHoriz,
   MdVisibility,
   MdExitToApp,
-  MdLocalPharmacy,
 } from 'react-icons/md';
 import '../patients/PatientList.css';
 import { DEPARTMENTS } from '../../../constants/departments';
 import api from '../../../utils/api';
 import Toast from '../../../components/Toast';
-import SendToPharmacyModal from '../../../components/receptionist/SendToPharmacyModal';
-import { normalizeMedicineRows } from './dischargeFormBuilders';
-
 const inputCls =
   'w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition';
 
@@ -103,6 +99,18 @@ const ipdApi = {
     if (!a) return null;
     const wtype = String(a.ward?.type || '').toUpperCase();
     const wardLabel = wtype === 'ICU' ? 'ICU' : wtype === 'PRIVATE' ? 'Private' : 'General';
+    const bill = a.billing || {};
+    const admissionDate = a.admissionDate ? new Date(a.admissionDate) : null;
+    const daysSinceAdmission = admissionDate
+      ? Math.max(1, Math.floor((Date.now() - admissionDate.getTime()) / 86400000))
+      : 1;
+    const admissionCharge = bill.admissionCharge || 0;
+    const roomTariffPerDay = bill.roomChargePerDay || 0;
+    const advancePaid = bill.advance || 0;
+    const estRoomCharge = roomTariffPerDay * daysSinceAdmission;
+    const estimatedBillTotal = admissionCharge + estRoomCharge;
+    const billingPending = Math.max(0, estimatedBillTotal - advancePaid);
+
     return {
       ...a,
       patientId: a.patient?.id || null,
@@ -120,6 +128,10 @@ const ipdApi = {
       bed: a.bed?.code || a.bedNumber || '',
       admissionDate: a.admissionDate,
       ipdNumber: a.ipdNumber || '',
+      advancePaid,
+      roomTariffPerDay,
+      estimatedBillTotal,
+      billingPending,
     };
   },
   async transferBed({ admissionId, toBedId, reason }) {
@@ -162,14 +174,36 @@ export default function ActiveIPDPatients() {
   const [notesSaving, setNotesSaving] = useState(false);
 
   const [toast, setToast] = useState({ type: 'success', message: '' });
-  const [sendPharmacyOpen, setSendPharmacyOpen] = useState(false);
-  const [pharmacyContext, setPharmacyContext] = useState(null);
-  const [pharmacyPrefill, setPharmacyPrefill] = useState([]);
-
   const doctorOptions = useMemo(() => {
     const set = new Set(patients.map((p) => p.doctor).filter(Boolean));
     return Array.from(set).sort();
   }, [patients]);
+
+  const filteredPatients = useMemo(() => {
+    return patients.filter((p) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const nameMatch = String(p.name || '').toLowerCase().includes(q);
+        const uhidMatch = String(p.uhid || '').toLowerCase().includes(q);
+        const ipdMatch = String(p.ipdNumber || p.id || '').toLowerCase().includes(q);
+        const mobileMatch = String(p.mobile || '').toLowerCase().includes(q);
+        if (!nameMatch && !uhidMatch && !ipdMatch && !mobileMatch) return false;
+      }
+      if (filters.ward) {
+        if (String(p.ward || '').toLowerCase() !== filters.ward.toLowerCase()) return false;
+      }
+      if (filters.department) {
+        if (String(p.department || '').toLowerCase() !== filters.department.toLowerCase()) return false;
+      }
+      if (filters.doctor) {
+        if (String(p.doctor || '').toLowerCase() !== filters.doctor.toLowerCase()) return false;
+      }
+      if (filters.status) {
+        if (String(p.status || '').toLowerCase() !== filters.status.toLowerCase()) return false;
+      }
+      return true;
+    });
+  }, [patients, searchQuery, filters]);
 
   const fetchActivePatients = useCallback(async () => {
     setLoading(true);
@@ -245,45 +279,6 @@ export default function ActiveIPDPatients() {
     setNotesPatient(p);
     setNoteText('');
     setNotesOpen(true);
-  };
-
-  const buildPharmacyToken = (p) => {
-    const ipd = String(p?.ipdNumber || p?.id || '').trim();
-    return ipd.startsWith('IPD-') ? ipd : `IPD-${ipd}`;
-  };
-
-  const openSendToPharmacy = async (p) => {
-    if (!p?.patientId && p?.id) {
-      try {
-        const detail = await ipdApi.fetchPatientDetail(p.id);
-        if (detail?.patientId) {
-          openSendToPharmacyWithRecord(detail);
-          return;
-        }
-      } catch {
-        setToast({ type: 'error', message: 'Could not load patient for pharmacy' });
-        return;
-      }
-    }
-    openSendToPharmacyWithRecord(p);
-  };
-
-  const openSendToPharmacyWithRecord = (p) => {
-    if (!p?.patientId) {
-      setToast({ type: 'error', message: 'Patient id missing' });
-      return;
-    }
-    const rxFromPlan = normalizeMedicineRows(p?.treatmentPlan?.medicines);
-    setPharmacyPrefill(rxFromPlan);
-    setPharmacyContext({
-      patientId: p.patientId,
-      doctorId: p.doctorId || undefined,
-      tokenNumber: buildPharmacyToken(p),
-      admissionId: p.id,
-      patientName: p.name || p.patientName,
-      uhid: p.uhid,
-    });
-    setSendPharmacyOpen(true);
   };
 
   const submitNotes = async () => {
@@ -410,8 +405,7 @@ export default function ActiveIPDPatients() {
               <button
                 type="button"
                 onClick={() => navigate('/dashboard/reception/ipd/admit')}
-                className="w-full lg:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white shadow-sm hover:shadow-md transition whitespace-nowrap"
-                style={{ background: 'linear-gradient(135deg, #065f46, #059669)' }}
+                className="w-full lg:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white bg-[#0077B6] hover:bg-[#00B4D8] shadow-sm hover:shadow-md transition whitespace-nowrap"
                 title="Admit new patient"
               >
                 <MdAdd className="w-4 h-4" /> Admit
@@ -467,8 +461,14 @@ export default function ActiveIPDPatients() {
                       Loading active IPD patients…
                     </td>
                   </tr>
+                ) : filteredPatients.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="px-3 py-14 text-center text-gray-400 text-sm">
+                      No active patients found matching current search/filters.
+                    </td>
+                  </tr>
                 ) : (
-                  patients.map((p) => {
+                  filteredPatients.map((p) => {
                     const st = STATUS_META[p.status] || DEFAULT_STATUS_META;
                     const rowCls = 'transition hover:bg-blue-50/30';
                     return (
@@ -535,14 +535,6 @@ export default function ActiveIPDPatients() {
                               className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"
                             >
                               <MdNotes className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              title="Send to Pharmacy"
-                              onClick={() => openSendToPharmacy(p)}
-                              className="p-1.5 rounded-lg hover:bg-violet-50 text-violet-700 transition"
-                            >
-                              <MdLocalPharmacy className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -695,17 +687,8 @@ export default function ActiveIPDPatients() {
                         <button
                           type="button"
                           className="pl-actionBtn"
-                          style={{ background: '#00AEEF', color: '#fff', borderColor: 'transparent' }}
-                          onClick={() => openSendToPharmacyWithRecord(selectedPatient)}
-                        >
-                          <MdLocalPharmacy className="w-4 h-4" /> Send To Pharmacy
-                        </button>
-                        <button
-                          type="button"
-                          className="pl-actionBtn"
                           onClick={() => handleOpenBilling(selectedPatient)}
-                          disabled={(selectedPatient.billingPending ?? 0) <= 0}
-                          title={(selectedPatient.billingPending ?? 0) <= 0 ? 'No pending bill' : 'Open billing'}
+                          title="Open billing"
                         >
                           <MdPayments className="w-4 h-4" /> Open billing
                         </button>
@@ -798,18 +781,7 @@ export default function ActiveIPDPatients() {
             document.body,
           )
         : null}
-
-      <SendToPharmacyModal
-        open={sendPharmacyOpen}
-        onClose={() => {
-          setSendPharmacyOpen(false);
-          setPharmacyContext(null);
-          setPharmacyPrefill([]);
-        }}
-        context={pharmacyContext}
-        prefillItems={pharmacyPrefill}
-        onSuccess={() => setToast({ type: 'success', message: 'Patient sent to Pharmacy queue' })}
-      />
     </div>
   );
 }
+

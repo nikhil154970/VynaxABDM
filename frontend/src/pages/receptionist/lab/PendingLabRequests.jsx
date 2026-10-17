@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { MdClose, MdRefresh } from 'react-icons/md';
 import api from '../../../utils/api';
 import { printLabBillSlip } from '../../../utils/printLabBillSlip';
@@ -10,6 +10,7 @@ function money(n) {
 }
 
 export default function PendingLabRequests() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const uhidFilter = (searchParams.get('uhid') || '').trim();
   const highlightRef = useRef(null);
@@ -92,6 +93,21 @@ export default function PendingLabRequests() {
       const order = res.data?.order;
       if (rowForPrint && bill) printIssuedSlip(rowForPrint, bill, order);
       if (closeModalOnSuccess) setViewRow(null);
+
+      // Agar bill mein balance baaki hai (Ayushman jaise auto-paid nahi), to receptionist ko
+      // seedha Pending payment screen pe le jao aur us bill ka Collect modal auto-open kar do —
+      // taaki wo wahin turant payment le le, bill silently pending mein na pada rahe.
+      const due = bill
+        ? Math.max(0, Math.round(Number(bill.totalAmount || 0)) - Math.round(Number(bill.paidAmount || 0)))
+        : 0;
+      const isPaid = String(bill?.status || '').toUpperCase() === 'PAID';
+      if (bill?.id && !isPaid && due > 0) {
+        navigate('/dashboard/reception/lab/pending-payment', {
+          state: { collectBillId: bill.id },
+        });
+        return;
+      }
+
       await load();
     } catch (e) {
       setError(e?.response?.data?.message || 'Could not confirm');
@@ -123,9 +139,9 @@ export default function PendingLabRequests() {
           style={{ background: '#FFFFFF', borderColor: 'rgba(0,0,0,0.06)' }}
         >
           <div>
-            <h1 className="text-lg font-extrabold text-gray-900">Advised OPD tests</h1>
+            <h1 className="text-lg font-extrabold text-gray-900">Pending Lab Tests</h1>
             <p className="text-xs text-gray-500 mt-1">
-              Doctor ne consultation me tests select kiye — abhi bill nahi bana. Paid / partial bills yahan nahi dikhte.
+              Doctor (OPD) ya Nurse (IPD) ne tests select kiye — abhi bill nahi bana. Paid / partial bills yahan nahi dikhte.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -194,6 +210,7 @@ export default function PendingLabRequests() {
                   style={{ borderColor: 'rgba(0,0,0,0.06)' }}
                 >
                   <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Source</th>
                   <th className="px-4 py-3">Doctor</th>
                   <th className="px-4 py-3 min-w-[200px]">Tests</th>
                   <th className="px-4 py-3 text-right">Total</th>
@@ -203,13 +220,13 @@ export default function PendingLabRequests() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-gray-500 font-semibold">
+                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500 font-semibold">
                       Loading…
                     </td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-gray-500 font-semibold">
+                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500 font-semibold">
                       {uhidFilter ? 'No matching pending rows for this UHID.' : 'No advised tests waiting for billing'}
                     </td>
                   </tr>
@@ -229,8 +246,24 @@ export default function PendingLabRequests() {
                         {r.patientUhid ? (
                           <span className="block text-[11px] font-mono text-gray-500 mt-0.5">{r.patientUhid}</span>
                         ) : null}
+                        {r.admissionIpdNumber ? (
+                          <span className="block text-[11px] font-mono text-blue-700 mt-0.5">IPD: {r.admissionIpdNumber}</span>
+                        ) : null}
                       </td>
-                      <td className="px-4 py-3 text-gray-800">{r.doctor || '—'}</td>
+                      <td className="px-4 py-3">
+                        {r.source === 'NURSE_IPD' ? (
+                          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-purple-50 text-purple-800 ring-1 ring-purple-200">
+                            Nurse IPD
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-800 ring-1 ring-blue-200">
+                            OPD Consult
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-800">
+                        {r.source === 'NURSE_IPD' ? (r.requestedByName || '—') : (r.doctor || '—')}
+                      </td>
                       <td className="px-4 py-3 text-gray-700">
                         <ul className="space-y-0.5">
                           {(r.tests || []).map((t, i) => (
@@ -294,10 +327,10 @@ export default function PendingLabRequests() {
                 style={{ borderColor: 'rgba(0,0,0,0.06)' }}
               >
                 <div>
-                  <h2 id="lab-advice-view-title" className="text-base font-extrabold text-gray-900">
-                    Advised lab tests
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-0.5">Review line items and prices, then bill to send the order to lab.</p>
+                    <h2 id="lab-advice-view-title" className="text-base font-extrabold text-gray-900">
+                      {viewRow.source === 'NURSE_IPD' ? 'Nurse-requested lab tests' : 'Advised lab tests'}
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Review line items and prices, then bill to send the order to lab.</p>
                 </div>
                 <button
                   type="button"
@@ -316,11 +349,28 @@ export default function PendingLabRequests() {
                     {viewRow.patientUhid ? (
                       <span className="block text-xs font-mono text-gray-600 mt-0.5">{viewRow.patientUhid}</span>
                     ) : null}
+                    {viewRow.admissionIpdNumber ? (
+                      <span className="block text-xs font-mono text-blue-700 mt-0.5">IPD: {viewRow.admissionIpdNumber}</span>
+                    ) : null}
                   </p>
                   <p>
-                    <span className="text-gray-500 font-semibold">Doctor</span>{' '}
-                    <span className="font-semibold text-gray-900">{viewRow.doctor || '—'}</span>
+                    <span className="text-gray-500 font-semibold">Source</span>{' '}
+                    <span className="font-semibold text-gray-900">
+                      {viewRow.source === 'NURSE_IPD' ? 'Nurse (IPD)' : 'Doctor (OPD)'}
+                    </span>
                   </p>
+                  <p>
+                    <span className="text-gray-500 font-semibold">Doctor/Nurse</span>{' '}
+                    <span className="font-semibold text-gray-900">
+                      {viewRow.source === 'NURSE_IPD' ? (viewRow.requestedByName || '—') : (viewRow.doctor || '—')}
+                    </span>
+                  </p>
+                  {viewRow.clinicalNote ? (
+                    <p>
+                      <span className="text-gray-500 font-semibold">Clinical note</span>{' '}
+                      <span className="text-gray-900">{viewRow.clinicalNote}</span>
+                    </p>
+                  ) : null}
                   {viewRow.createdAt ? (
                     <p className="text-xs text-gray-500">
                       Advised on {new Date(viewRow.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}

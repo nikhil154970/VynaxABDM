@@ -42,6 +42,7 @@ export default function AddNotes() {
     date: nowHuman(),
     status: 'Stable',
     text: '',
+    showInHistory: true,
   });
 
   useEffect(() => {
@@ -113,6 +114,7 @@ export default function AddNotes() {
       date: nowHuman(),
       status: 'Stable',
       text: '',
+      showInHistory: true,
     });
   };
 
@@ -130,9 +132,10 @@ export default function AddNotes() {
       await api.post('/nurse/notes', {
         admissionId: selectedPatient.admissionId,
         notes: composed,
+        showInHistory: form.showInHistory,
       });
       setSuccessMsg('Note saved successfully.');
-      setForm((f) => ({ ...f, text: '', date: nowHuman() }));
+      setForm((f) => ({ ...f, text: '', date: nowHuman(), showInHistory: true }));
       window.setTimeout(() => setSuccessMsg(''), 2000);
     } catch (e) {
       setSuccessMsg(e?.response?.data?.message || 'Could not save note');
@@ -252,6 +255,20 @@ export default function AddNotes() {
                   <option value="Under Observation">Under Observation</option>
                 </select>
               </div>
+            </div>
+
+            <div className="add-notes-field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0 16px 0', cursor: 'pointer' }}>
+              <input
+                id="add-notes-showInHistory"
+                type="checkbox"
+                checked={form.showInHistory}
+                onChange={(e) => setForm((f) => ({ ...f, showInHistory: e.target.checked }))}
+                disabled={disabled}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
+              <label htmlFor="add-notes-showInHistory" style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
+                Show in Patient History Timeline
+              </label>
             </div>
 
             <div className="add-notes-field">

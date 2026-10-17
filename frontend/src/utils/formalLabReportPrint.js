@@ -1,44 +1,126 @@
-import { HOSPITAL_NAME_EN } from './hospitalBranding';
-
 /**
- * Formal  HTML — S.D. Pathology header (unchanged) with inner layout
- * matching multi-page pathology PDFs: consulting block, patient meta + page x/y,
- * justified category intro, section title, optional panel sub-headings, results table.
- * Categories from GET /lab/reports/:id (per-line `category` on results).
- *
- * PRINT FORMAT: Matches the physical printed slip exactly (image reference).
+ * Formal lab report HTML — Naitik Hospital header with patient meta and results table.
+ * One printed page per billed test/panel within each department (only submitted result rows).
  */
 
-export const REPORT_LOGO_DATA_URI = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
-<svg xmlns="http://www.w3.org/2000/svg" width="140" height="80" viewBox="0 0 140 80">
-  <defs>
-    <linearGradient id="g" x1="0" x2="1">
-      <stop offset="0" stop-color="#7a2ca6"/>
-      <stop offset="1" stop-color="#b23bb5"/>
-    </linearGradient>
-  </defs>
-  <rect x="0" y="0" width="140" height="80" rx="10" fill="url(#g)"/>
-  <path d="M0 62 C40 48, 78 78, 140 52 L140 80 L0 80 Z" fill="#f6c53a" opacity="0.95"/>
-  <text x="70" y="36" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="22" font-weight="900" fill="#ffffff" letter-spacing="1">S.D.</text>
-  <text x="70" y="58" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="16" font-weight="900" fill="#ffffff" letter-spacing="1">PATHOLOGY</text>
-</svg>
-`)}`;
+import api from './api';
 
-/** Long intros (reference-style) per panel — similar to printed lab PDFs. */
-const INTRO_HEMATOLOGY =
-  'A platelet count is a diagnostic test that determines the number of platelets in the patient\'s blood. Platelets, which are also called thrombocytes, are small disk-shaped blood cells produced in the bone marrow and involved in the process of blood clotting. There are normally between 150,000–450,000 platelets in each micro-liter of blood. Low platelet counts or abnormally shaped platelets are associated with bleeding disorders. High platelet counts sometimes indicate disorders of the bone marrow.';
+export const REPORT_LOGO_DATA_URI = '/hopital_logo.png';
 
-const INTRO_LIVER =
-  'Liver function tests, also known as liver chemistries, help determine the health of your liver by measuring the levels of proteins, liver enzymes, and bilirubin in your blood. They can also monitor the progression or treatment of an existing disease. Depending on the test, either higher or lower-than-typical levels of these enzymes or proteins can indicate a problem with your liver. Some of the reasons liver function tests may be performed include screening for diseases such as hepatitis, monitoring the side effects of your medications, and examining the severity of liver disease.';
+/** Stable print order for known lab departments (matches result entry workflow). */
+const DEPARTMENT_PRINT_ORDER = [
+  'Hematology',
+  'Biochemistry',
+  'Microbiology',
+  'Serology',
+  'Clinical Pathology',
+  'Hormone Profile',
+  'Tumor Marker',
+  'Orthopedics / Arthritis / Collagen Profile Panel',
+  'Infectious Disease Markers',
+  'Hepatology & Gastroenterology',
+  'AUTOIMMUNE & COLLAGEN MARKERS',
+  'Immunology',
+  'Hormones',
+  'Coagulation',
+  'Tumor Markers',
+  'Other',
+];
 
-const INTRO_RENAL =
-  'Renal function tests (RFT) are a group of tests that may be performed together to evaluate kidney (renal) function. The tests measure levels of various substances, including several minerals, electrolytes, proteins, and glucose (sugar), in the blood to determine the current health of the kidneys. If the kidneys are not functioning properly, waste products can accumulate in the blood and fluid levels can increase to dangerous volumes, causing damage to the body or a potentially life-threatening situation. Numerous conditions and diseases can result in damage to the kidneys. The most common causes of and main risk factors for kidney disease are diabetes and hypertension.';
+function compactKey(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
 
-const INTRO_GENERIC_BIO =
-  'Clinical chemistry tests measure chemical substances in blood or other body fluids. Results help your doctor assess organ function, metabolic status, and response to treatment. Interpretation should always be correlated with clinical findings.';
+function namesMatch(a, b) {
+  const x = compactKey(a);
+  const y = compactKey(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (x.length >= 3 && y.length >= 3 && (x.includes(y) || y.includes(x))) return true;
+  return false;
+}
 
-const INTRO_GENERIC =
-  'The following investigations have been performed using standard laboratory methods. Results should be interpreted in conjunction with the patient\'s clinical history and examination findings.';
+/** Only print rows the technician actually entered (skip blank / placeholder). */
+function hasFilledResultValue(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return false;
+  if (s === '—' || s === '-' || s === '–' || s.toLowerCase() === 'na' || s.toLowerCase() === 'n/a') return false;
+  return true;
+}
+
+/** Guess department from panel/test name when DB category is missing (reception reprint). */
+function inferDepartmentFromPanelName(name) {
+  const n = compactKey(name);
+  if (!n) return null;
+  const rules = [
+    ['Serology', ['aso', 'widal', 'hbsag', 'hcv', 'hiv', 'vdrl', 'typhoid', 'malaria', 'dengue', 'rheumatoid', 'crp', 'serology']],
+    ['Hematology', ['cbc', 'hemoglobin', 'haemoglobin', 'esr', 'platelet', 'coagulation', 'btct', 'peripheral smear', 'hematology']],
+    ['Biochemistry', ['lft', 'kft', 'rft', 'lipid', 'glucose', 'sugar', 'creatinine', 'urea', 'bilirubin', 'sgot', 'sgpt', 'hba1c', 'biochemistry']],
+    ['Microbiology', ['culture', 'stain', 'afb', 'gram', 'sputum', 'swab', 'fungal', 'koh', 'microbiology']],
+    ['Clinical Pathology', ['urine', 'stool', 'semen analysis', 'clinical pathology']],
+    ['Hormone Profile', ['hormone', 'tsh', 't3', 't4', 'prolactin', 'cortisol']],
+    ['Tumor Marker', ['tumor', 'psa', 'cea', 'afp', 'ca125', 'ca19']],
+  ];
+  for (const [dept, keys] of rules) {
+    if (keys.some((k) => n.includes(compactKey(k)))) return dept;
+  }
+  return null;
+}
+
+function findOrderTestNameForResult(row, orderTests) {
+  const name = String(row?.name || row?.testName || '').trim();
+  const remarks = String(row?.remarks || row?.group || '').trim();
+  const list = Array.isArray(orderTests) ? orderTests : [];
+  if (name) {
+    const byName = list.find((t) => namesMatch(t.name || t.testName, name));
+    if (byName) return String(byName.name || byName.testName || '').trim();
+  }
+  if (remarks) {
+    const byPanel = list.find((t) => namesMatch(t.name || t.testName, remarks));
+    if (byPanel) return String(byPanel.name || byPanel.testName || '').trim();
+  }
+  return name || '';
+}
+
+function resolveDepartment(row, orderTests) {
+  const fromRow = String(row?.category || '').trim();
+  if (fromRow && compactKey(fromRow) !== 'general') return fromRow;
+
+  const remarks = String(row?.remarks || row?.group || '').trim();
+  const list = Array.isArray(orderTests) ? orderTests : [];
+
+  if (remarks) {
+    const byPanel = list.find((t) => namesMatch(t.name || t.testName, remarks));
+    const panelCat = String(byPanel?.category || '').trim();
+    if (panelCat && compactKey(panelCat) !== 'general') return panelCat;
+  }
+
+  const panel = findOrderTestNameForResult(row, orderTests);
+  const hit = list.find((t) => namesMatch(t.name || t.testName, panel));
+  const fromOrder = String(hit?.category || '').trim();
+  if (fromOrder && compactKey(fromOrder) !== 'general') return fromOrder;
+
+  if (fromRow) return fromRow;
+
+  const panelName = remarks || panel;
+  const inferred = inferDepartmentFromPanelName(panelName);
+  if (inferred) return inferred;
+
+  return 'Other';
+}
+
+function normalizeDeptCompare(value) {
+  return compactKey(value);
+}
+
+function departmentSortIndex(name) {
+  const key = normalizeDeptCompare(name);
+  const idx = DEPARTMENT_PRINT_ORDER.findIndex((d) => normalizeDeptCompare(d) === key);
+  return idx >= 0 ? idx : 900 + key.charCodeAt(0);
+}
 
 export function escapeHtml(value) {
   return String(value ?? '')
@@ -58,49 +140,29 @@ export function formatDateOnly(iso) {
 export function formatTimeOnly(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 }
 
-function normalizeRow(r) {
+function normalizeRow(r, orderTests) {
   if (r?.isSubHeading) return null;
   const name = String(r?.name || r?.testName || '').trim();
   if (!name) return null;
+  if (!hasFilledResultValue(r?.value)) return null;
+
+  const department = resolveDepartment(r, orderTests);
+
+  // Group by the panel/test the technician saved (remarks), not fuzzy-matched order line items.
+  const panelFromEntry = String(r?.remarks || r?.group || '').trim();
+  const testName = panelFromEntry || findOrderTestNameForResult(r, orderTests) || name;
+
   return {
     name,
-    value: r?.value ?? '—',
+    value: String(r?.value ?? '').trim(),
     unit: r?.unit ?? '—',
     range: r?.range ?? r?.referenceRange ?? '—',
-    category: String(r?.category || '').trim(),
+    category: department,
+    testName,
   };
-}
-
-function isHematologyRow(row) {
-  const c = row.category.toLowerCase();
-  if (/hema|haem|cbc|hematology|blood routine|btct/i.test(c)) return true;
-  const n = row.name.toLowerCase();
-  return /\b(hb|hemoglobin|hgb|wbc|tlc|neutrophil|lymphocyte|monocyte|eosinophil|basophil|platelet|plt|rbc|pcv|hct|mcv|mch|mchc|esr|rdw|mpv)\b/i.test(n);
-}
-
-function isBiochemistryRow(row) {
-  const c = row.category.toLowerCase();
-  if (/bio|chem|clinical|liver|renal|lipid|thyroid|serum|patho/i.test(c)) return true;
-  const n = row.name.toLowerCase();
-  return /\b(bilirubin|urea|creatinine|creatnine|uric|sodium|potassium|chloride|glucose|sugar|rbs|sgpt|sgot|ast|alt|alkaline|phosphatase|albumin|globulin|protein|crp|calcium|amylase|lipase|tsh|t3|t4)\b/i.test(n);
-}
-
-/** Split biochemistry rows into LFT / RFT / ELECTROLYTES / OTHER for PDF-style panels. */
-function biochemistryPanel(row) {
-  const n = row.name.toLowerCase();
-  if (/\b(sodium|potassium|chloride)\b/i.test(n)) return 'ELECTROLYTES';
-  if (/\b(urea|creatinine|creatnine|uric acid|calcium|glucose|blood sugar|random blood|rbs|gfr|bun|egfr)\b/i.test(n)) return 'RFT';
-  if (/\b(bilirubin|sgpt|sgot|ast|alt|alkaline|phosphatase|albumin|globulin|total protein|crp|amylase|lipase|ldh)\b/i.test(n)) return 'LFT';
-  return 'OTHER';
-}
-
-function genericIntroForCategory(cat) {
-  const c = String(cat || '').trim();
-  if (!c) return INTRO_GENERIC;
-  return `${INTRO_GENERIC} This sheet covers investigations grouped under "${c}".`;
 }
 
 /**
@@ -108,64 +170,80 @@ function genericIntroForCategory(cat) {
  */
 
 /**
- * Build ordered print pages (each becomes one printed sheet with full header repeat).
+ * One print page per test/panel within each department (only rows the user submitted).
  * @param {Record<string, unknown>} report
  * @returns {PrintPageDef[]}
  */
 export function buildPrintPagesForReport(report) {
+  const orderTests = Array.isArray(report?.orderTests) ? report.orderTests : [];
   const raw = Array.isArray(report?.results) ? report.results : [];
-  const rows = raw.map(normalizeRow).filter(Boolean);
-  if (!rows.length) {
-    return [{ intro: INTRO_GENERIC, sectionTitle: 'LAB REPORT', blocks: [{ subHeading: null, rows: [] }] }];
-  }
+  const rows = raw.map((r) => normalizeRow(r, orderTests)).filter(Boolean);
+  if (!rows.length) return [];
 
-  const hema = rows.filter(isHematologyRow);
-  const remaining = rows.filter((r) => !isHematologyRow(r));
-  const bio = remaining.filter(isBiochemistryRow);
-  const nonBio = remaining.filter((r) => !isBiochemistryRow(r));
+  /** @type {Map<string, { dept: string, testName: string, rows: object[], order: number }>} */
+  const groups = new Map();
+  let seq = 0;
 
-  /** @type {PrintPageDef[]} */
-  const pages = [];
-
-  if (hema.length) {
-    pages.push({ intro: INTRO_HEMATOLOGY, sectionTitle: 'HEMATOLOGY REPORT', blocks: [{ subHeading: null, rows: hema }] });
-  }
-
-  if (bio.length) {
-    const lft = bio.filter((r) => biochemistryPanel(r) === 'LFT');
-    const rft = bio.filter((r) => biochemistryPanel(r) === 'RFT');
-    const elec = bio.filter((r) => biochemistryPanel(r) === 'ELECTROLYTES');
-    const oth = bio.filter((r) => biochemistryPanel(r) === 'OTHER');
-
-    if (lft.length) {
-      pages.push({ intro: INTRO_LIVER, sectionTitle: 'BIOCHEMISTRY REPORT', blocks: [{ subHeading: 'LIVER FUNCTION TEST', rows: lft }] });
+  rows.forEach((row) => {
+    const dept = row.category;
+    const testName = row.testName;
+    const key = `${normalizeDeptCompare(dept)}\x00${compactKey(testName)}`;
+    if (!groups.has(key)) {
+      groups.set(key, { dept, testName, rows: [], order: seq++ });
     }
+    groups.get(key).rows.push(row);
+  });
 
-    const renalBlocks = [];
-    if (rft.length) renalBlocks.push({ subHeading: 'RENAL FUNCTION TEST', rows: rft });
-    if (elec.length) renalBlocks.push({ subHeading: 'ELECTROLYTES', rows: elec });
-    if (oth.length) renalBlocks.push({ subHeading: 'OTHER TESTS', rows: oth });
+  const sorted = [...groups.values()].sort((a, b) => {
+    const deptOrder = departmentSortIndex(a.dept) - departmentSortIndex(b.dept);
+    if (deptOrder !== 0) return deptOrder;
+    return a.order - b.order;
+  });
 
-    if (renalBlocks.length) {
-      const onlyOther = renalBlocks.length === 1 && renalBlocks[0].subHeading === 'OTHER TESTS' && !rft.length && !elec.length;
-      pages.push({ intro: onlyOther ? INTRO_GENERIC_BIO : INTRO_RENAL, sectionTitle: 'BIOCHEMISTRY REPORT', blocks: renalBlocks });
-    }
-  }
+  return sorted.map((g) => ({
+    intro: '',
+    sectionTitle: `${g.dept.toUpperCase()} REPORT`,
+    blocks: [{ subHeading: g.testName, rows: g.rows }],
+  }));
+}
 
-  const byCat = new Map();
-  for (const r of nonBio) {
-    const k = r.category || 'GENERAL';
-    if (!byCat.has(k)) byCat.set(k, []);
-    byCat.get(k).push(r);
-  }
-  for (const [cat, list] of byCat) {
-    if (!list.length) continue;
-    pages.push({ intro: genericIntroForCategory(cat), sectionTitle: `${String(cat).toUpperCase()} REPORT`, blocks: [{ subHeading: null, rows: list }] });
-  }
-
-  if (pages.length) return pages;
-
-  return [{ intro: INTRO_GENERIC_BIO, sectionTitle: 'LAB REPORT', blocks: [{ subHeading: null, rows }] }];
+/**
+ * Build a printable report row from results just submitted (keeps department/category from entry form).
+ */
+export function buildFormalReportFromSubmit({ detail, patient, results, overallRemarks, diagnosis }) {
+  const orderTests = (detail?.items || []).map((it) => ({
+    name: it.testName,
+    testName: it.testName,
+    category: it.category || null,
+  }));
+  return {
+    id: detail?.id,
+    orderNumber: detail?.orderNumber || '',
+    billNumber: detail?.bill?.billNumber || null,
+    patientName: patient?.name,
+    uhid: patient?.uhid,
+    age: patient?.age,
+    gender: patient?.gender,
+    doctorName: detail?.doctor?.user?.name || detail?.doctorName || '',
+    date: detail?.createdAt || new Date().toISOString(),
+    reportGeneratedAt: new Date().toISOString(),
+    overallRemarks: overallRemarks || null,
+    diagnosis: diagnosis || null,
+    sampleType: 'BLOOD',
+    orderTests,
+    results: (Array.isArray(results) ? results : [])
+      .filter((r) => hasFilledResultValue(r?.value))
+      .filter((r, i, arr) => arr.findIndex((x) => x.testName === r.testName && x.value === r.value) === i)
+      .map((r) => ({
+        name: r.testName,
+        testName: r.testName,
+        value: r.value,
+        unit: r.unit,
+        range: r.referenceRange,
+        category: r.category || null,
+        remarks: r.remarks,
+      })),
+  };
 }
 
 /**
@@ -186,17 +264,36 @@ export function labReportApiToFormalReport(data) {
     date: data.createdAt,
     reportGeneratedAt: data.updatedAt || data.createdAt,
     overallRemarks: data.notes || null,
-    diagnosis: null,
+    diagnosis: data.diagnosis || null,
     sampleType: 'BLOOD',
-    results: (data.results || []).map((r) => ({
-      name: r.testName,
-      value: r.value,
-      unit: r.unit,
-      range: r.referenceRange,
-      category: r.category || null,
-      remarks: r.remarks,
-      fileUrl: r.fileUrl,
+    orderTests: (data.tests || []).map((t) => ({
+      name: t.name,
+      testName: t.name,
+      category: t.category || null,
     })),
+    results: (data.results || [])
+      .filter((r) => hasFilledResultValue(r?.value))
+      .filter((r, i, arr) => arr.findIndex((x) => x.testName === r.testName && x.value === r.value) === i)
+      .map((r) => {
+        const panel = String(r?.remarks || '').trim();
+        const orderTests = Array.isArray(data.tests) ? data.tests : [];
+        let category = r.category || null;
+        if (!category && panel) {
+          const hit = orderTests.find((t) => namesMatch(t.name, panel));
+          category = hit?.category || null;
+        }
+        if (!category) category = inferDepartmentFromPanelName(panel || r.testName);
+        return {
+          name: r.testName,
+          testName: r.testName,
+          value: r.value,
+          unit: r.unit,
+          range: r.referenceRange,
+          category,
+          remarks: r.remarks,
+          fileUrl: r.fileUrl,
+        };
+      }),
   };
 }
 
@@ -215,7 +312,6 @@ const PRINT_STYLES = `
   .print-page { page-break-after: always; break-after: page; }
   .print-page:last-child { page-break-after: auto; break-after: auto; }
 
-  /* ── HEADER ── */
   .hdr {
     display: flex;
     width: 100%;
@@ -245,21 +341,20 @@ const PRINT_STYLES = `
   .hdr-logo-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .hdr-info { display: flex; flex-direction: column; justify-content: center; }
   .hdr-lab-name {
-    font-size: 26px;
+    font-size: 18px;
     font-weight: 900;
     color: #fff;
     font-family: Georgia, serif;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    line-height: 1.1;
+    letter-spacing: 1px;
+    line-height: 1.2;
   }
   .hdr-lab-sub {
-    font-size: 9.5px;
+    font-size: 8px;
     color: #c8daee;
-    line-height: 1.5;
+    line-height: 1.4;
     margin-top: 2px;
   }
-  /* Right yellow panel */
   .hdr-right {
     background: #f5b800;
     flex: 0 0 220px;
@@ -279,7 +374,7 @@ const PRINT_STYLES = `
     letter-spacing: 0.5px;
   }
   .hdr-dr-name {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 900;
     color: #1a1a1a;
     font-family: Georgia, serif;
@@ -287,17 +382,15 @@ const PRINT_STYLES = `
     margin-top: 16px;
   }
   .hdr-dr-deg {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     color: #3a1e00;
     margin-top: 2px;
     text-align: center;
   }
 
-  /* ── BODY ── */
   .body { padding: 10px 14px 14px; }
 
-  /* Patient meta table — matches image exactly */
   .meta {
     width: 100%;
     border-collapse: collapse;
@@ -322,7 +415,6 @@ const PRINT_STYLES = `
     color: #111;
   }
 
-  /* ── SECTION BANNER — centered bold box like image ── */
   .category-banner {
     margin: 14px 0 0;
     border: 2px solid #111;
@@ -336,7 +428,6 @@ const PRINT_STYLES = `
     font-family: "Times New Roman", Times, serif;
   }
 
-  /* Panel sub-heading (LFT / RFT etc.) */
   .panel-sub {
     font-weight: 900;
     font-size: 12px;
@@ -348,7 +439,6 @@ const PRINT_STYLES = `
     padding-bottom: 2px;
   }
 
-  /* ── RESULTS TABLE ── */
   .results { margin-top: 6px; }
 
   .r-header {
@@ -371,23 +461,11 @@ const PRINT_STYLES = `
   }
   .r-row:last-child { border-bottom: none; }
 
-  /* Column widths matching image proportions */
   .r-h-name, .r-name  { flex: 3; }
   .r-h-val,  .r-val   { flex: 1.1; font-weight: 700; }
   .r-h-unit, .r-unit  { flex: 1.4; }
   .r-h-range,.r-range { flex: 1.5; }
 
-  /* ── INTRO BLURB — small justified text below results ── */
-  .intro-blurb {
-    font-size: 9px;
-    line-height: 1.45;
-    text-align: justify;
-    margin-top: 10px;
-    color: #222;
-    hyphens: auto;
-  }
-
-  /* ── FOOTER ── */
   .footer-row {
     display: flex;
     justify-content: space-between;
@@ -417,7 +495,6 @@ const PRINT_STYLES = `
     margin: 36px auto 4px;
   }
 
-  /* ── REMARKS ── */
   .remarks {
     margin-top: 10px;
     font-size: 10px;
@@ -425,19 +502,6 @@ const PRINT_STYLES = `
     color: #333;
     border-top: 1px solid #ccc;
     padding-top: 6px;
-  }
-
-  /* ── BOTTOM NOTE BAR ── */
-  .note-bar {
-    margin-top: 12px;
-    background: #f5b800;
-    color: #1a1a1a;
-    font-size: 9.5px;
-    text-align: center;
-    padding: 5px 10px;
-    font-style: italic;
-    font-weight: 600;
-    letter-spacing: 0.3px;
   }
 
   @media print {
@@ -509,10 +573,6 @@ function buildCategorySheetHtml(report, pageDef, pageIndex, totalPages, addPageB
   const reportNo = String(report.orderNumber || report.billNumber || report.id || '—');
   const regNo = report.regNo || 'AL-2676';
 
-  // Don't print any extra paragraphs below results.
-  const introHtml = '';
-
-  // Remarks only on last page
   const remarksBlock =
     showFooterSignatures && (report.overallRemarks || report.diagnosis)
       ? `<div class="remarks">
@@ -521,7 +581,6 @@ function buildCategorySheetHtml(report, pageDef, pageIndex, totalPages, addPageB
         </div>`
       : '';
 
-  // Footer (signature + page number + note bar) on EVERY page
   const footerBlock = `${showFooterSignatures ? remarksBlock : ''}
       <div class="footer-row">
         <div class="footer-left">
@@ -540,17 +599,16 @@ function buildCategorySheetHtml(report, pageDef, pageIndex, totalPages, addPageB
 
   return `
     <div class="sheet${addPageBreakAfter ? ' print-page' : ''}">
-      <!-- HEADER -->
       <div class="hdr">
         <div class="hdr-left">
           <div class="hdr-logo-wrap">
-            <img alt="SD Pathology Logo" src="${REPORT_LOGO_DATA_URI}" />
+            <img alt="Naitik Hospital Logo" src="${REPORT_LOGO_DATA_URI}" />
           </div>
           <div class="hdr-info">
-            <div class="hdr-lab-name">S.D. PATHOLOGY</div>
+            <div class="hdr-lab-name">Naitik Hospital and Surgical Center</div>
             <div class="hdr-lab-sub">
               Anand Vihar Colony, Hydel Road, BLW, Varanasi.<br />
-              Email Id: sdpathology05@gmail.com &nbsp;|&nbsp; Mob.: 7541031287
+              Mob.: 7541031287
             </div>
           </div>
         </div>
@@ -561,9 +619,7 @@ function buildCategorySheetHtml(report, pageDef, pageIndex, totalPages, addPageB
         </div>
       </div>
 
-      <!-- BODY -->
       <div class="body">
-        <!-- Patient Meta Table -->
         <table class="meta">
           <tr>
             <td class="lbl">Patient Name</td>
@@ -572,41 +628,41 @@ function buildCategorySheetHtml(report, pageDef, pageIndex, totalPages, addPageB
             <td class="val">: ${escapeHtml(reportDate)}</td>
           </tr>
           <tr>
-            <td class="lbl">Age (Y-M-D)</td>
-            <td class="val">:${escapeHtml(report.age != null ? String(report.age) : '—')} Yrs.</td>
+            <td class="lbl">UHID</td>
+            <td class="val">:${escapeHtml(report.uhid || '—')}</td>
             <td class="lbl">Reported Time</td>
             <td class="val">: ${escapeHtml(reportTime)}</td>
           </tr>
           <tr>
-            <td class="lbl">Sex -</td>
-            <td class="val">:${escapeHtml(report.gender || '—')}</td>
+            <td class="lbl">Age (Y-M-D)</td>
+            <td class="val">:${escapeHtml(report.age != null ? String(report.age) : '—')} Yrs.</td>
             <td class="lbl">Given Date</td>
             <td class="val">: ${escapeHtml(givenDate)}</td>
           </tr>
           <tr>
-            <td class="lbl">Ref by Dr</td>
-            <td class="val">:${escapeHtml(report.doctorName || HOSPITAL_NAME_EN)}</td>
+            <td class="lbl">Sex -</td>
+            <td class="val">:${escapeHtml(report.gender || '—')}</td>
             <td class="lbl">Given Time</td>
             <td class="val">: ${escapeHtml(givenTime)}</td>
           </tr>
           <tr>
-            <td class="lbl">Sample Type</td>
-            <td class="val">:${escapeHtml(report.sampleType || 'BLOOD')}</td>
+            <td class="lbl">Ref by Dr</td>
+            <td class="val">:${escapeHtml(report.doctorName || 'NAITIK HOSPITAL')}</td>
             <td class="lbl">Report No.</td>
             <td class="val">:${escapeHtml(reportNo)}</td>
           </tr>
+          <tr>
+            <td class="lbl">Sample Type</td>
+            <td class="val">:${escapeHtml(report.sampleType || 'BLOOD')}</td>
+            <td class="lbl">&nbsp;</td>
+            <td class="val">&nbsp;</td>
+          </tr>
         </table>
 
-        <!-- Section Banner -->
         <div class="category-banner">${escapeHtml(pageDef.sectionTitle)}</div>
 
-        <!-- Results blocks -->
         ${buildBlocksHtml(pageDef)}
 
-        <!-- Intro blurb below results (as in the printed image) -->
-        ${introHtml}
-
-        <!-- Footer -->
         ${footerBlock}
       </div>
     </div>
@@ -643,18 +699,61 @@ export function buildFormalLabReportDocumentHtml(reports) {
 </html>`;
 }
 
+/** Fetch completed lab order report and map to formal S.D. Pathology print row (reception / doctor / nurse). */
+export async function fetchFormalLabReportForPrint(requestId) {
+  const id = String(requestId || '').trim();
+  if (!id) throw new Error('Report id is required');
+  const res = await api.get(`/lab/reports/${encodeURIComponent(id)}`);
+  const data = res?.data;
+  if (!data) throw new Error('Empty report');
+  const formal = labReportApiToFormalReport(data);
+  if (!buildPrintPagesForReport(formal).length) {
+    throw new Error('No printable results found for this report.');
+  }
+  return formal;
+}
+
+/** Open print window immediately on user click (avoids popup blocker after async API). */
+export function openLabReportPrintPlaceholder() {
+  const w = window.open('', '_blank', 'width=900,height=700');
+  if (!w) return null;
+  try {
+    w.document.open();
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Loading report…</title></head>
+      <body style="font-family:Arial,sans-serif;padding:32px;text-align:center;color:#334155">
+        <p style="font-size:16px;font-weight:700">Loading lab report…</p>
+        <p style="font-size:13px;margin-top:8px;color:#64748b">Please wait</p>
+      </body></html>`);
+    w.document.close();
+  } catch {
+    return null;
+  }
+  return w;
+}
+
 /**
- * @param {object[]} reports — formal row objects (use {@link labReportApiToFormalReport} per GET /lab/reports)
+ * Write formal report HTML into an already-open window and optionally print.
+ * @param {Window|null} w
+ * @param {object[]} reports
  * @param {{ autoPrint?: boolean }} opts
  */
-export function openFormalLabReportWindow(reports, opts = {}) {
+export function writeFormalLabReportToWindow(w, reports, opts = {}) {
   const { autoPrint = true } = opts;
   const list = Array.isArray(reports) ? reports.filter(Boolean) : [];
-  if (!list.length) return null;
+  if (!w || w.closed) {
+    window.alert('Print window was closed. Please try again.');
+    return null;
+  }
+  if (!list.length) {
+    window.alert('No report data to print.');
+    try { w.close(); } catch { /* ignore */ }
+    return null;
+  }
 
-  const w = window.open('', '_blank', 'width=900,height=700');
-  if (!w) {
-    window.alert('Popup blocked. Please allow popups for printing.');
+  const hasPages = list.some((r) => buildPrintPagesForReport(r).length > 0);
+  if (!hasPages) {
+    window.alert('No printable results found for this report.');
+    try { w.close(); } catch { /* ignore */ }
     return null;
   }
 
@@ -665,18 +764,18 @@ export function openFormalLabReportWindow(reports, opts = {}) {
     w.document.close();
     w.focus();
     if (autoPrint) {
-      w.onload = () => {
+      const triggerPrint = () => {
         setTimeout(() => {
-          w.focus();
-          w.print();
+          try {
+            w.focus();
+            w.print();
+          } catch {
+            /* ignore */
+          }
         }, 300);
       };
-      if (w.document.readyState === 'complete') {
-        setTimeout(() => {
-          w.focus();
-          w.print();
-        }, 500);
-      }
+      w.onload = triggerPrint;
+      if (w.document.readyState === 'complete') triggerPrint();
     }
     return w;
   } catch (error) {
@@ -684,11 +783,62 @@ export function openFormalLabReportWindow(reports, opts = {}) {
       w.document.open();
       w.document.write(`<pre style="font-family:Arial;padding:16px">Print failed: ${escapeHtml(error?.message || error)}</pre>`);
       w.document.close();
-    } catch (e) {
+    } catch {
       window.alert('Print failed. Please try again.');
     }
     return null;
   }
+}
+
+/** Fetch report then print — opens window first so popup blockers do not block. */
+export async function printFormalLabReportByRequestId(requestId) {
+  const w = openLabReportPrintPlaceholder();
+  if (!w) {
+    window.alert('Popup blocked. Please allow popups for this site (top address bar → allow popups), then try Print again.');
+    return null;
+  }
+  try {
+    const formal = await fetchFormalLabReportForPrint(requestId);
+    return writeFormalLabReportToWindow(w, [formal], { autoPrint: true });
+  } catch (e) {
+    try {
+      w.document.open();
+      w.document.write(
+        `<pre style="font-family:Arial;padding:16px;color:#991b1b">${escapeHtml(
+          e?.response?.data?.message || e?.message || 'Could not load report for printing.',
+        )}</pre>`,
+      );
+      w.document.close();
+    } catch {
+      /* ignore */
+    }
+    window.alert(e?.response?.data?.message || e?.message || 'Could not load report for printing.');
+    return null;
+  }
+}
+
+/**
+ * @param {object[]} reports — formal row objects (use {@link labReportApiToFormalReport} per GET /lab/reports)
+ * @param {{ autoPrint?: boolean, printWindow?: Window|null }} opts
+ */
+export function openFormalLabReportWindow(reports, opts = {}) {
+  const { autoPrint = true, printWindow = null } = opts;
+  const list = Array.isArray(reports) ? reports.filter(Boolean) : [];
+  if (!list.length) return null;
+
+  const hasPages = list.some((r) => buildPrintPagesForReport(r).length > 0);
+  if (!hasPages) {
+    window.alert('No printable results found for this report.');
+    return null;
+  }
+
+  const w = printWindow || window.open('', '_blank', 'width=900,height=700');
+  if (!w) {
+    window.alert('Popup blocked. Please allow popups for printing.');
+    return null;
+  }
+
+  return writeFormalLabReportToWindow(w, list, { autoPrint });
 }
 
 /** Save same HTML as a file (open in browser → Print to PDF). */

@@ -1,0 +1,143 @@
+/* =====================================================
+   InputBar.css - Message input area (blue theme)
+   ===================================================== */
+
+.input-bar {
+  flex-shrink: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.input-bar__wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1.5px solid rgba(59, 130, 246, 0.15);
+  border-radius: 18px;
+  padding: 8px 10px 8px 12px;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.04), 0 1px 4px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.input-bar__wrapper:focus-within {
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 12px 32px rgba(59, 130, 246, 0.08), 0 0 0 3px rgba(59, 130, 246, 0.05);
+  transform: translateY(-1px);
+}
+
+.input-bar__spark {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--ap-accent);
+  background: rgba(0, 119, 182, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.08);
+}
+
+.input-bar__spark svg {
+  width: 14px;
+  height: 14px;
+}
+
+.input-bar__textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: var(--ap-font);
+  font-size: 14px;
+  color: var(--ap-text);
+  line-height: 1.5;
+  min-height: 22px;
+  max-height: 120px;
+  padding: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.25) transparent;
+}
+
+.input-bar__textarea::placeholder {
+  color: var(--ap-text-dim);
+}
+
+.input-bar__textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Send button */
+.input-bar__send-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  background: rgba(59, 130, 246, 0.06);
+  color: var(--ap-accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.04);
+}
+
+.input-bar__send-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.input-bar__send-btn--active {
+  background: #0077B6;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.input-bar__send-btn--active:hover {
+  background: #0055a4;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.3);
+}
+
+.input-bar__send-btn--active:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.input-bar__send-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+/* Hint text */
+.input-bar__hint {
+  font-size: 10px;
+  color: var(--ap-text-dim);
+  text-align: center;
+  margin: 5px 0 0;
+  font-family: var(--ap-font);
+}
+
+.input-bar__hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid rgba(59, 130, 246, 0.08);
+  color: var(--ap-accent);
+  font-family: var(--ap-mono);
+  font-size: 9px;
+}

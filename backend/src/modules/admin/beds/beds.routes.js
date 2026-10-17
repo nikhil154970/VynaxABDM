@@ -13,6 +13,7 @@ const {
   updateBed,
   deleteBed,
 } = require('./beds.controller');
+const { getBedOccupancyAnalytics } = require('./bedOccupancy.controller');
 
 const router = express.Router();
 const adminOnly = [authMiddleware, roleMiddleware(['SUPER_ADMIN'])];
@@ -89,6 +90,8 @@ router.delete(
   validateRequest,
   deleteBed
 );
+
+router.get('/analytics', ...adminOnly, getBedOccupancyAnalytics);
 
 module.exports = router;
 

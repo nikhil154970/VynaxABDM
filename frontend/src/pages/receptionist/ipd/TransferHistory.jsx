@@ -88,8 +88,17 @@ export default function TransferHistory() {
         setLoading(false);
       }
     },
-    [q, fromWardId, toWardId, fromDate, toDate, page, limit],
+    [q, fromWardId, toWardId, fromDate, toDate, limit],
   );
+
+  const [debouncedQ, setDebouncedQ] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQ(q);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [q]);
 
   useEffect(() => {
     loadWards();
@@ -97,9 +106,7 @@ export default function TransferHistory() {
 
   useEffect(() => {
     loadHistory(1);
-    // Manual refresh mode: do not auto-refetch on every keystroke; user clicks Search/Refresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [debouncedQ, fromWardId, toWardId, fromDate, toDate, limit, loadHistory]);
 
   const canPrev = page > 1;
   const canNext = page < totalPages;
@@ -108,61 +115,83 @@ export default function TransferHistory() {
     <div className="min-h-screen bg-gray-50">
       <div className="p-6 space-y-4">
         {/* Filters */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
           <div className="flex flex-wrap items-center gap-2 text-xs font-extrabold text-gray-500">
             <MdFilterList className="w-4 h-4" />
             Search & filters
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-            <div className="lg:col-span-4 relative">
-              <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search: Name / UHID / IPD / Bed / Ward / Reason"
-                className={`${inputCls} pl-9`}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="lg:col-span-2 relative">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Search Query</label>
+              <div className="relative">
+                <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Name / UHID / IPD / Bed / Ward"
+                  className={`${inputCls} pl-9`}
+                />
+              </div>
             </div>
 
-            <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">From Ward</label>
               <select
                 className="pl-select w-full"
                 value={fromWardId}
                 onChange={(e) => setFromWardId(e.target.value)}
                 disabled={loadingWards}
               >
-                <option value="">{loadingWards ? 'Loading wards…' : 'From ward (all)'}</option>
+                <option value="">{loadingWards ? 'Loading…' : 'All wards'}</option>
                 {wardOptions.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">To Ward</label>
               <select
                 className="pl-select w-full"
                 value={toWardId}
                 onChange={(e) => setToWardId(e.target.value)}
                 disabled={loadingWards}
               >
-                <option value="">{loadingWards ? 'Loading wards…' : 'To ward (all)'}</option>
+                <option value="">{loadingWards ? 'Loading…' : 'All wards'}</option>
                 {wardOptions.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">From Date</label>
               <input
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
                 className={inputCls}
-                title="From date"
               />
-              <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={inputCls} title="To date" />
             </div>
 
-            <div className="lg:col-span-3 flex flex-wrap gap-2 lg:justify-end">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">To Date</label>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100">
+            <div className="flex items-center gap-3">
               <select
                 className="pl-select"
                 value={String(limit)}
@@ -171,7 +200,7 @@ export default function TransferHistory() {
                   setLimit(v);
                   setPage(1);
                 }}
-                style={{ minWidth: 140 }}
+                style={{ minWidth: 120 }}
                 title="Rows per page"
               >
                 {[10, 20, 30, 50, 100, 200].map((n) => (
@@ -180,22 +209,31 @@ export default function TransferHistory() {
                   </option>
                 ))}
               </select>
+              <span className="text-xs text-gray-500">
+                Found <b className="text-gray-700">{total.toLocaleString('en-IN')}</b> transfer(s) · Page <b className="text-gray-700">{page}</b> / {totalPages}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => loadHistory(1)}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white shadow-sm hover:shadow-md transition"
-                style={{ background: 'linear-gradient(135deg, #1d4ed8, #2563eb)' }}
-                disabled={loading}
+                onClick={() => {
+                  setQ('');
+                  setFromWardId('');
+                  setToWardId('');
+                  setFromDate('');
+                  setToDate('');
+                  setPage(1);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold border border-gray-200 text-gray-700 hover:bg-gray-50 transition"
               >
-                <MdSearch className="w-4 h-4" />
-                Search
+                Clear filters
               </button>
               <button
                 type="button"
                 onClick={() => loadHistory(page)}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-extrabold border border-gray-200 text-gray-700 hover:bg-gray-50 transition disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold border border-gray-200 text-gray-700 hover:bg-gray-50 transition"
                 disabled={loading}
-                title="Refresh"
               >
                 <MdRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -203,16 +241,7 @@ export default function TransferHistory() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
-            <span>
-              <b className="text-gray-700">{total.toLocaleString('en-IN')}</b> transfer(s)
-            </span>
-            <span className="text-gray-400">
-              Page <b className="text-gray-700">{page}</b> / {totalPages}
-            </span>
-          </div>
-
-          {error ? <div className="pl-miniError">{error}</div> : null}
+          {error ? <div className="pl-miniError text-xs text-red-600 font-semibold">{error}</div> : null}
         </div>
 
         {/* Table */}

@@ -15,6 +15,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    watch: {
+      ignored: ['**/backend/**', '**/.vite/**', '**/*.log', '**/*.txt', '**/node_modules/**'],
+    },
+    hmr: {
+      overlay: false,
+    },
     proxy: {
       '/api': 'http://localhost:5000',
     },

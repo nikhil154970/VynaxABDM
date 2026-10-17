@@ -19,7 +19,7 @@ function fmtDateTime(v) {
 }
 
 /**
- * Printable IPD discharge summary (New H.T. Hospital branding — matches discharge slip header).
+ * Printable IPD discharge summary (MQE HIMS branding — matches discharge slip header).
  * @param {{ admission: object, dischargeRequestedAt?: string|null }} opts
  */
 export function printDischargeSummary({ admission, dischargeRequestedAt }) {

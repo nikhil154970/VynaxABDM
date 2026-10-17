@@ -1,7 +1,7 @@
 import api from './api';
 import { isAyushmanSponsor, slipSponsorBannerHtml, AYUSHMAN_PAYMENT_LABEL } from './ayushmanBilling';
 import { hospitalMobileSlipHtml } from './hospitalContact';
-import { printSlipHeaderTextHtml } from './hospitalBranding';
+import { APPOINTMENT_SLIP_LOGO, printAppointmentSlipHeaderHtml } from './hospitalBranding';
 
 function safeText(v) {
   const s = v == null ? '' : String(v);
@@ -57,33 +57,13 @@ function slipAmountWords(row, formattedAmount) {
   return '';
 }
 
-/**
- * Prints the OPD receipt using the same HTML template as Appointment List.
- * Pass an appointment object that includes at least { id }.
- */
-export async function printOpdSlip(a) {
-  if (!a?.id) return;
+function buildOpdSlipHtmlInner(row) {
+  const feeDisplay = row._feeDisplay;
+  const sponsorBanner = row._sponsorBanner;
+  const amountWords = row._amountWords;
+  const ayushman = row._ayushman;
 
-  const res = await api.get(`/receptionist/appointments/${encodeURIComponent(a.id)}`);
-  const db = res?.data?.appointment || {};
-
-  // Merge: keep any UI-provided fields, but prefer DB for real values when available.
-  const row = { ...a, ...db };
-  const sponsor = row.sponsor || row.sponsorLabel || '';
-  const ayushman = row.isAyushman === true || isAyushmanSponsor(sponsor);
-  if (ayushman) {
-    row.paymentStatus = 'PAID';
-    row.paymentMode = row.paymentMode || AYUSHMAN_PAYMENT_LABEL;
-  }
-
-  const w = window.open('', '_blank', 'width=900,height=700');
-  if (!w) return;
-
-  const feeDisplay = slipFeeAmount(row);
-  const sponsorBanner = slipSponsorBannerHtml(sponsor);
-  const amountWords = slipAmountWords(row, feeDisplay);
-
-  const html = `
+  return `
   <html>
   <head>
     <title>OPD Receipt</title>
@@ -97,7 +77,6 @@ export async function printOpdSlip(a) {
       }
       .slip { border: 1px solid #000; }
 
-      /* ===== HEADER ===== */
       .opd-header {
         position: relative;
         height: 110px;
@@ -166,7 +145,6 @@ export async function printOpdSlip(a) {
         letter-spacing: 0.5px;
       }
 
-      /* ===== BODY ===== */
       .row-line {
         display: flex;
         justify-content: space-between;
@@ -222,10 +200,7 @@ export async function printOpdSlip(a) {
   <body>
   <div class="slip">
 
-    <!-- HEADER -->
     <div class="opd-header">
-
-      <!-- WAVE SVG -->
       <svg style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;"
            viewBox="0 0 800 110" preserveAspectRatio="none"
            xmlns="http://www.w3.org/2000/svg">
@@ -238,28 +213,25 @@ export async function printOpdSlip(a) {
       </svg>
 
       <div class="logo-box">
-        <img src="/hopital_logo.png" alt="NH" />
+        <img src="${APPOINTMENT_SLIP_LOGO}" alt="VyanX Hospital Management System" />
       </div>
 
-      <div class="header-text">${printSlipHeaderTextHtml()}
+      <div class="header-text">${printAppointmentSlipHeaderHtml()}
       </div>
     </div>
 
-    <!-- ROW: SER.NO | OPD RECEIPT | MO -->
     <div class="row-line">
-      <div><b>SER.NO:</b> ${safeText(row?.serial || '—')}</div>
+      <div><b>SER.NO:</b> ${safeText(row?.serial || row?.opdNumber || '—')}</div>
       <div style="font-weight:bold;font-size:13px;">OPD RECEIPT</div>
       ${hospitalMobileSlipHtml()}
     </div>
 
     ${sponsorBanner}
 
-    <!-- ROW: REG.NO -->
     <div class="row-line" style="justify-content:flex-start;">
       <div><b>REG.NO-</b> ${safeText(row?.registrationNumber || '—')}</div>
     </div>
 
-    <!-- PATIENT INFO + DATE/TIME -->
     <div class="mid-section">
       <div class="patient-info">
         <div><b>Outdoor P:</b> ${safeText(row?.opdNumber || '—')} &nbsp;&nbsp; <b>Patient Reg:</b> ${safeText(row?.patientReg || '—')}</div>
@@ -287,7 +259,6 @@ export async function printOpdSlip(a) {
       </div>
     </div>
 
-    <!-- CHARGE TABLE -->
     <table class="main-table">
       <thead>
         <tr>
@@ -305,7 +276,6 @@ export async function printOpdSlip(a) {
       </tbody>
     </table>
 
-    <!-- NET PAYABLE / PAID -->
     <table class="total-table">
       <tr>
         <td style="width:55%;"></td>
@@ -319,7 +289,6 @@ export async function printOpdSlip(a) {
       </tr>
     </table>
 
-    <!-- FOOTER -->
     <div class="footer">
       ${safeText(amountWords)}<br>
       ISO CERTIFIED 9001-2015
@@ -335,13 +304,55 @@ export async function printOpdSlip(a) {
     </div>
 
   </div>
-  <script>window.onload = function() { window.print(); }</script>
   </body>
   </html>
   `;
+}
+
+/**
+ * Build the OPD slip HTML from a data row.
+ * Can be reused by any caller (reception, patient, etc.).
+ */
+export function buildOpdSlipHtml(row) {
+  const sponsor = row.sponsor || row.sponsorLabel || '';
+  const ayushman = row.isAyushman === true || isAyushmanSponsor(sponsor);
+  const feeDisplay = slipFeeAmount(row);
+  const sponsorBanner = slipSponsorBannerHtml(sponsor);
+  const amountWords = slipAmountWords(row, feeDisplay);
+
+  return buildOpdSlipHtmlInner({ ...row, _ayushman: ayushman, _feeDisplay: feeDisplay, _sponsorBanner: sponsorBanner, _amountWords: amountWords });
+}
+
+/**
+ * Prints the OPD receipt using the same HTML template as Appointment List.
+ * Pass an appointment object that includes at least { id }.
+ */
+export async function printOpdSlip(a) {
+  if (!a?.id) return;
+
+  const res = await api.get(`/receptionist/appointments/${encodeURIComponent(a.id)}`);
+  const db = res?.data?.appointment || {};
+
+  const row = { ...a, ...db };
+  const sponsor = row.sponsor || row.sponsorLabel || '';
+  const ayushman = row.isAyushman === true || isAyushmanSponsor(sponsor);
+  if (ayushman) {
+    row.paymentStatus = 'PAID';
+    row.paymentMode = row.paymentMode || AYUSHMAN_PAYMENT_LABEL;
+  }
+
+  const html = buildOpdSlipHtml(row);
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  if (!w) return;
 
   w.document.open();
   w.document.write(html);
   w.document.close();
-}
 
+  setTimeout(() => {
+    w.focus();
+    w.print();
+    w.onafterprint = () => w.close();
+  }, 600);
+}

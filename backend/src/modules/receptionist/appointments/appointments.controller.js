@@ -161,6 +161,11 @@ async function createAppointment(req, res) {
   const uhid = normalizeString(body.uhid);
   const doctorId = normalizeString(body.doctorId);
   const department = normalizeString(body.department) || null;
+  if (department === 'Emergency & Trauma Care' || department === 'Critical Care (ICU)') {
+    return res.status(400).json({
+      message: `${department} patients must be admitted via the IPD Admission module, not booked as OPD appointments.`
+    });
+  }
   let fee = parseOptionalInt(body.fee);
   let paymentMode = normalizeString(body.paymentMode) || null;
   let paymentStatus = normalizePaymentStatus(body.paymentStatus) || null;

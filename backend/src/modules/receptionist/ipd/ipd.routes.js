@@ -10,9 +10,12 @@ const {
   listNurseLookup,
   listActiveAdmissions,
   listPendingDoctorReferrals,
+  fulfillDoctorReferral,
   listNurseApprovedDischargeQueue,
   getDischargeClearances,
   getAdmissionDetail,
+  canAssignNurse,
+  listAvailableNurses,
   createAdmission,
   transferBed,
   listTransferHistory,
@@ -77,6 +80,14 @@ router.get(
   listPendingDoctorReferrals
 );
 
+router.post(
+  '/referrals/:id/fulfill',
+  ...receptionistOnly,
+  [param('id').isUUID().withMessage('Valid referral id is required')],
+  validateRequest,
+  fulfillDoctorReferral
+);
+
 router.get(
   '/active',
   ...receptionistOnly,
@@ -90,6 +101,10 @@ router.get(
   validateRequest,
   listActiveAdmissions
 );
+
+// Evening/night reception: nurse assignment (static paths before /admissions/:id)
+router.get('/can-assign-nurse', ...receptionistOnly, validateRequest, canAssignNurse);
+router.get('/available-nurses', ...receptionistOnly, validateRequest, listAvailableNurses);
 
 router.get(
   '/admissions/:id/discharge-clearances',
@@ -117,11 +132,16 @@ router.post(
     body('department').optional().isString(),
     body('admissionType').optional().isString(),
     body('admissionDate').optional().isString(),
+    body('diagnosis').optional().isString(),
+    body('notes').optional().isString(),
+    body('expectedStay').optional().isString(),
+    body('emergencyName').optional().isString(),
+    body('emergencyPhone').optional().isString(),
     body('wardId').isUUID().withMessage('wardId must be a valid uuid'),
     body('bedId').isUUID().withMessage('bedId must be a valid uuid'),
-    body('nurseId').optional().isUUID().withMessage('nurseId must be a valid uuid'),
     body('status').optional().isString(),
     body('billing').optional().isObject(),
+    body('nurseId').optional().isUUID().withMessage('nurseId must be a valid uuid'),
   ],
   validateRequest,
   createAdmission

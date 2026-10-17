@@ -1,4 +1,8 @@
 const { prisma } = require('../../../config/prisma');
+const { emitAbdmClinicalEvent, EVENT } = require('../../abdm/lib/abdmHealthRecord');
+const { createPendingAllocationRequest, createApprovedAllocationWithAssignment } = require('../../../lib/allocationWorkflow');
+const { triggerCriticalAlert } = require('../../../lib/notificationHelpers');
+const { canUserAssignNurse, getUserCurrentShiftType } = require('../../../lib/shiftHelpers');
 const {
   applyAyushmanAdmissionBilling,
   getLatestPatientSponsor,
@@ -63,6 +67,36 @@ function normalizeAdmissionStatus(v) {
   if (s === 'READY_FOR_DISCHARGE') return 'READY_FOR_DISCHARGE';
   if (s === 'DISCHARGE_REQUESTED') return 'DISCHARGE_REQUESTED';
   return null;
+}
+
+/** Open IPD stays — excludes discharged rows (READY_FOR_DISCHARGE + dischargeDate). */
+const OPEN_ADMISSION_STATUSES = ['ADMITTED', 'UNDER_TREATMENT', 'DISCHARGE_REQUESTED'];
+
+function isOpenAdmissionWhere(extra = {}) {
+  return {
+    ...extra,
+    dischargeDate: null,
+    status: { in: OPEN_ADMISSION_STATUSES },
+  };
+}
+
+function buildAdmissionNotesText({ diagnosis, notes, expectedStay }) {
+  const parts = [];
+  const dx = normalizeString(diagnosis);
+  if (dx) parts.push(`Diagnosis: ${dx}`);
+  const n = normalizeString(notes);
+  if (n) parts.push(`Notes: ${n}`);
+  const stay = normalizeString(expectedStay);
+  if (stay) parts.push(`Expected stay (days): ${stay}`);
+  return parts.length ? parts.join('\n') : null;
+}
+
+async function clearReferAdmitForPatient(tx, patientId) {
+  if (!patientId) return;
+  await tx.consultation.updateMany({
+    where: { patientId, disposition: 'REFER_ADMIT' },
+    data: { disposition: 'NORMAL' },
+  });
 }
 
 function admissionStatusLabel(v) {
@@ -294,7 +328,7 @@ async function listActiveAdmissions(req, res) {
   const doctorId = normalizeString(req.query.doctorId);
   const status = normalizeAdmissionStatus(req.query.status);
 
-  const where = { status: { in: ['ADMITTED', 'UNDER_TREATMENT', 'READY_FOR_DISCHARGE', 'DISCHARGE_REQUESTED'] } };
+  const where = isOpenAdmissionWhere();
   if (status) where.status = status;
   if (wardId) where.wardId = wardId;
   if (department && department.toLowerCase() !== 'all') where.department = department;
@@ -342,7 +376,7 @@ async function listActiveAdmissions(req, res) {
               nurse: { select: { name: true, email: true } },
             }
           : {}),
-        billing: { select: { roomChargePerDay: true } },
+        billing: { select: { admissionCharge: true, roomChargePerDay: true, advance: true } },
         createdAt: true,
       },
     }),
@@ -350,31 +384,44 @@ async function listActiveAdmissions(req, res) {
     prisma.bed.count({ where: { ...bedStatsWhereBase(), status: 'OCCUPIED' } }),
   ]);
 
-  // pending dues snapshot is out-of-scope; return 0 for now
   return res.json({
     bedStats: { totalBeds, occupiedBeds },
-    patients: patients.map((a) => ({
-      id: a.id,
-      patientId: a.patientId,
-      doctorId: a.doctorId,
-      ipdNumber: resolvedIpdNumber(a),
-      uhid: a.patient?.uhid || null,
-      name: a.patient?.name || '',
-      mobile: a.patient?.mobile || '',
-      age: a.patient?.age ?? null,
-      gender: a.patient?.gender ? String(a.patient.gender) : '',
-      ward: a.ward?.type === 'ICU' ? 'ICU' : a.ward?.type === 'PRIVATE' ? 'Private' : 'General',
-      wardName: a.ward?.name || '',
-      bed: a.bed?.code || a.bedNumber || '',
-      doctor: a.doctor?.user?.name || '',
-      nurse: admissionSupportsAssignedNurse() ? (a.nurse?.name || a.nurse?.email || '') : '',
-      department: a.department || '',
-      admissionDate: a.admissionDate,
-      status: admissionStatusLabel(a.status),
-      billingPending: 0,
-      bloodGroup: a.patient?.bloodGroup || '',
-      roomTariffPerDay: a.billing?.roomChargePerDay ?? null,
-    })),
+    patients: patients.map((a) => {
+      const bill = a.billing || {};
+      const admissionDate = a.admissionDate ? new Date(a.admissionDate) : null;
+      const daysSinceAdmission = admissionDate
+        ? Math.max(1, Math.floor((Date.now() - admissionDate.getTime()) / 86400000))
+        : 1;
+      const admissionCharge = Number(bill.admissionCharge) || 0;
+      const roomTariffPerDay = Number(bill.roomChargePerDay) || 0;
+      const advancePaid = Number(bill.advance) || 0;
+      const estRoomCharge = roomTariffPerDay * daysSinceAdmission;
+      const estimatedBillTotal = admissionCharge + estRoomCharge;
+      const billingPending = Math.max(0, estimatedBillTotal - advancePaid);
+
+      return {
+        id: a.id,
+        patientId: a.patientId,
+        doctorId: a.doctorId,
+        ipdNumber: resolvedIpdNumber(a),
+        uhid: a.patient?.uhid || null,
+        name: a.patient?.name || '',
+        mobile: a.patient?.mobile || '',
+        age: a.patient?.age ?? null,
+        gender: a.patient?.gender ? String(a.patient.gender) : '',
+        ward: a.ward?.type === 'ICU' ? 'ICU' : a.ward?.type === 'PRIVATE' ? 'Private' : 'General',
+        wardName: a.ward?.name || '',
+        bed: a.bed?.code || a.bedNumber || '',
+        doctor: a.doctor?.user?.name || '',
+        nurse: admissionSupportsAssignedNurse() ? (a.nurse?.name || a.nurse?.email || '') : '',
+        department: a.department || '',
+        admissionDate: a.admissionDate,
+        status: admissionStatusLabel(a.status),
+        billingPending,
+        bloodGroup: a.patient?.bloodGroup || '',
+        roomTariffPerDay: roomTariffPerDay || null,
+      };
+    }),
   });
 }
 
@@ -423,21 +470,30 @@ async function listPendingDoctorReferrals(req, res) {
     }
   }
 
-  // Exclude patients already admitted/under treatment/ready for discharge.
+  // Exclude patients already in IPD or who were admitted from this referral.
+  const admissionsForPatients = patientIds.length
+    ? await prisma.admission.findMany({
+        where: { patientId: { in: patientIds } },
+        select: { patientId: true, createdAt: true },
+      })
+    : [];
   const activeAdmissions = patientIds.length
     ? await prisma.admission.findMany({
-        where: {
-          patientId: { in: patientIds },
-          status: { in: ['ADMITTED', 'UNDER_TREATMENT', 'READY_FOR_DISCHARGE', 'DISCHARGE_REQUESTED'] },
-          dischargeDate: null,
-        },
+        where: isOpenAdmissionWhere({ patientId: { in: patientIds } }),
         select: { patientId: true },
       })
     : [];
   const activeSet = new Set(activeAdmissions.map((a) => a.patientId));
 
+  const referralFulfilled = (patientId, referralAt) => {
+    const refMs = referralAt ? new Date(referralAt).getTime() : 0;
+    return admissionsForPatients.some(
+      (a) => a.patientId === patientId && new Date(a.createdAt).getTime() >= refMs,
+    );
+  };
+
   const items = rows
-    .filter((r) => !activeSet.has(r.patientId))
+    .filter((r) => !activeSet.has(r.patientId) && !referralFulfilled(r.patientId, r.createdAt))
     .map((r) => ({
       referralId: r.id,
       consultationId: r.id,
@@ -472,6 +528,26 @@ async function listPendingDoctorReferrals(req, res) {
   return res.json({ items });
 }
 
+async function fulfillDoctorReferral(req, res) {
+  const id = normalizeString(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Referral id is required' });
+
+  const consult = await prisma.consultation.findUnique({
+    where: { id },
+    select: { id: true, disposition: true },
+  });
+  if (!consult) return res.status(404).json({ message: 'Referral not found' });
+  if (String(consult.disposition || '').toUpperCase() !== 'REFER_ADMIT') {
+    return res.json({ ok: true, alreadyFulfilled: true });
+  }
+
+  await prisma.consultation.update({
+    where: { id },
+    data: { disposition: 'NORMAL' },
+  });
+  return res.json({ ok: true });
+}
+
 function wardCategoryShort(wardType) {
   const v = String(wardType || '').toUpperCase();
   if (v === 'ICU') return 'ICU';
@@ -497,8 +573,9 @@ async function listNurseApprovedDischargeQueue(req, res) {
     take: 200,
     select: {
       id: true,
+      patientId: true,
       dischargeRequestedAt: true,
-      patient: { select: { name: true, uhid: true } },
+      patient: { select: { id: true, name: true, uhid: true } },
       ward: { select: { name: true, type: true } },
       bed: { select: { code: true } },
       nurse: { select: { name: true, email: true } },
@@ -508,6 +585,7 @@ async function listNurseApprovedDischargeQueue(req, res) {
 
   const items = rows.map((a) => ({
     id: a.id,
+    patientId: a.patient?.id || a.patientId || '',
     name: a.patient?.name || '',
     uhid: a.patient?.uhid || '',
     ward: wardDisplayLine(a.ward),
@@ -678,6 +756,49 @@ function billBelongsToAdmissionStay(bill, admission) {
   return bd >= since;
 }
 
+function billOnOrAfterAdmission(bill, admission) {
+  if (!bill || !admission) return false;
+  const since = admission.admissionDate ? new Date(admission.admissionDate).getTime() : 0;
+  const bd = bill.billDate
+    ? new Date(bill.billDate).getTime()
+    : bill.createdAt
+      ? new Date(bill.createdAt).getTime()
+      : 0;
+  return bd >= since;
+}
+
+function isLabRelatedBill(bill) {
+  if (!bill) return false;
+  if (Array.isArray(bill.labOrders) && bill.labOrders.length) return true;
+  const notes = String(bill.notes || '').toLowerCase();
+  if (notes.includes('lab order') || notes.includes('lab advice') || notes.includes('opd lab')) return true;
+  const items = Array.isArray(bill.lineItems) ? bill.lineItems : [];
+  return items.some((i) => /lab\s*test|laboratory/i.test(String(i.description || '')));
+}
+
+function isOtRelatedBill(bill) {
+  if (!bill) return false;
+  if (bill.otRequest) return true;
+  const notes = String(bill.notes || '').toLowerCase();
+  if (/\bot\b/.test(notes) || notes.includes('operation') || notes.includes('surgery')) return true;
+  const items = Array.isArray(bill.lineItems) ? bill.lineItems : [];
+  return items.some((i) => /\bot\b|operation|surgery/i.test(String(i.description || '')));
+}
+
+function mapPendingBillRow(b) {
+  return {
+    id: b.id,
+    billNumber: b.billNumber,
+    visitType: b.visitType,
+    status: b.status,
+    totalAmount: b.totalAmount,
+    paidAmount: b.paidAmount,
+    pending: billPendingAmount(b),
+    admissionId: b.admissionId,
+    category: isLabRelatedBill(b) ? 'LAB' : isOtRelatedBill(b) ? 'OT' : 'GENERAL',
+  };
+}
+
 /**
  * Pre-discharge checks: nurse approval already done; all patient bills settled;
  * no lab orders stuck in pending billing since admission.
@@ -727,34 +848,36 @@ async function getDischargeClearances(req, res) {
       paidAmount: true,
       admissionId: true,
       billDate: true,
+      createdAt: true,
+      notes: true,
       payments: { select: { amount: true } },
+      lineItems: { select: { description: true } },
+      labOrders: { select: { id: true, orderNumber: true } },
+      otRequest: { select: { id: true, requestNumber: true } },
     },
   });
 
+  const sinceAdmissionBills = allPatientBills.filter((b) => billOnOrAfterAdmission(b, admission));
   const patientBills = allPatientBills.filter((b) => billBelongsToAdmissionStay(b, admission));
   const otherPatientBills = allPatientBills.filter((b) => !billBelongsToAdmissionStay(b, admission));
-  const otherPatientBillingPending = otherPatientBills.reduce((s, b) => s + billPendingAmount(b), 0);
-  const otherPendingBills = otherPatientBills
-    .filter((b) => billPendingAmount(b) > 0)
-    .map((b) => ({
-      id: b.id,
-      billNumber: b.billNumber,
-      visitType: b.visitType,
-      pending: billPendingAmount(b),
-    }));
+
+  const labRelatedPendingBills = sinceAdmissionBills
+    .filter((b) => billPendingAmount(b) > 0 && isLabRelatedBill(b))
+    .map(mapPendingBillRow);
+
+  const otRelatedPendingBills = sinceAdmissionBills
+    .filter((b) => billPendingAmount(b) > 0 && isOtRelatedBill(b) && !isLabRelatedBill(b))
+    .map(mapPendingBillRow);
 
   const blockingBills = patientBills
-    .filter((b) => billPendingAmount(b) > 0)
-    .map((b) => ({
-      id: b.id,
-      billNumber: b.billNumber,
-      visitType: b.visitType,
-      status: b.status,
-      totalAmount: b.totalAmount,
-      paidAmount: b.paidAmount,
-      pending: billPendingAmount(b),
-      admissionId: b.admissionId,
-    }));
+    .filter((b) => billPendingAmount(b) > 0 && !isLabRelatedBill(b))
+    .map(mapPendingBillRow);
+
+  const otherPendingBills = otherPatientBills
+    .filter((b) => billPendingAmount(b) > 0 && billOnOrAfterAdmission(b, admission) && !isLabRelatedBill(b))
+    .map(mapPendingBillRow);
+
+  const otherPatientBillingPending = otherPendingBills.reduce((s, b) => s + (b.pending || 0), 0);
 
   const since = admission.admissionDate || new Date(0);
   const labOrders = await prisma.labOrder.findMany({
@@ -779,23 +902,6 @@ async function getDischargeClearances(req, res) {
       reason: 'Lab order is not billed yet — complete lab billing before discharge.',
     }));
 
-  const billingClearance = blockingBills.length === 0;
-  const labClearance = blockingLabOrders.length === 0;
-  const allClear = nursingClearance && billingClearance && labClearance;
-  const billingPendingTotal = blockingBills.reduce((s, b) => s + (b.pending || 0), 0);
-  const totalPatientBillingPending = patientBills.reduce((s, b) => s + billPendingAmount(b), 0);
-  const mayDischargeWithBillingDues = nursingClearance && labClearance && !billingClearance;
-
-  const clearedBills = patientBills
-    .filter((b) => billPendingAmount(b) === 0)
-    .map((b) => ({
-      id: b.id,
-      billNumber: b.billNumber,
-      visitType: b.visitType,
-      totalAmount: b.totalAmount,
-      paidAmount: b.paidAmount,
-    }));
-
   const pharmacyDueBills = await prisma.pharmacyBill.findMany({
     where: {
       patientId: admission.patientId,
@@ -818,6 +924,44 @@ async function getDischargeClearances(req, res) {
     bills: pharmacyDueBills,
   };
 
+  const billingClearance = blockingBills.length === 0;
+  const labBillingPendingTotal = labRelatedPendingBills.reduce((s, b) => s + (b.pending || 0), 0);
+  const otBillingPendingTotal = otRelatedPendingBills.reduce((s, b) => s + (b.pending || 0), 0);
+  const labClearance = blockingLabOrders.length === 0 && labRelatedPendingBills.length === 0;
+  const billingPendingTotal = blockingBills.reduce((s, b) => s + (b.pending || 0), 0);
+  const otherBillingPendingTotal = otherPendingBills.reduce((s, b) => s + (b.pending || 0), 0);
+  const totalPatientBillingPending =
+    billingPendingTotal + labBillingPendingTotal + otBillingPendingTotal + otherBillingPendingTotal;
+  const grandTotalOutstanding = totalPatientBillingPending + Number(pharmacyDue.pendingAmount || 0);
+  const allClear =
+    nursingClearance &&
+    billingClearance &&
+    labClearance &&
+    otRelatedPendingBills.length === 0 &&
+    Number(pharmacyDue.pendingAmount || 0) === 0;
+  const mayDischargeWithBillingDues =
+    nursingClearance && labClearance && otRelatedPendingBills.length === 0 && !billingClearance;
+
+  const clearedBills = patientBills
+    .filter((b) => billPendingAmount(b) === 0)
+    .map((b) => ({
+      id: b.id,
+      billNumber: b.billNumber,
+      visitType: b.visitType,
+      totalAmount: b.totalAmount,
+      paidAmount: b.paidAmount,
+    }));
+
+  const billingSummary = {
+    ipdStayPending: billingPendingTotal,
+    labBillsPending: labBillingPendingTotal,
+    otBillsPending: otBillingPendingTotal,
+    otherPending: otherBillingPendingTotal,
+    pharmacyPending: Number(pharmacyDue.pendingAmount || 0),
+    totalOutstanding: grandTotalOutstanding,
+    clearedBillCount: clearedBills.length,
+  };
+
   return res.json({
     admissionId: admission.id,
     patient: admission.patient,
@@ -831,6 +975,11 @@ async function getDischargeClearances(req, res) {
     blockingBills,
     labClearance,
     blockingLabOrders,
+    blockingLabBills: labRelatedPendingBills,
+    labBillingPendingTotal,
+    blockingOtBills: otRelatedPendingBills,
+    otBillingPendingTotal,
+    billingSummary,
     allClear,
     clearedBills,
     totalPatientBillingPending,
@@ -903,6 +1052,54 @@ async function getAdmissionDetail(req, res) {
   });
 }
 
+async function canAssignNurse(req, res) {
+  try {
+    const userId = req.user?.userId || req.user?.id;
+    const userRole = req.user?.role;
+    const allowed = await canUserAssignNurse(userId, userRole);
+    const shift = allowed ? (await getUserCurrentShiftType(userId)) || 'DAY' : null;
+    return res.json({ canAssignNurse: allowed, shift });
+  } catch (e) {
+    console.error('canAssignNurse error:', e);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function listAvailableNurses(req, res) {
+  try {
+    const userId = req.user?.userId || req.user?.id;
+    const userRole = req.user?.role;
+    const allowed = await canUserAssignNurse(userId, userRole);
+    if (!allowed) return res.status(403).json({ message: 'Not authorized to assign nurses' });
+
+    const users = await prisma.user.findMany({
+      where: { role: 'NURSE', isActive: true },
+      select: { id: true, name: true, employeeId: true, department: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const admissions = await prisma.admission.findMany({
+      where: { status: { in: ['ADMITTED', 'UNDER_TREATMENT', 'READY_FOR_DISCHARGE', 'DISCHARGE_REQUESTED'] }, nurseId: { not: null } },
+      select: { nurseId: true },
+    });
+    const countMap = {};
+    for (const a of admissions) countMap[a.nurseId] = (countMap[a.nurseId] || 0) + 1;
+
+    const nurses = users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      employeeId: u.employeeId,
+      department: u.department || '—',
+      activePatients: countMap[u.id] || 0,
+    }));
+
+    return res.json({ nurses });
+  } catch (e) {
+    console.error('listAvailableNurses error:', e);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 async function createAdmission(req, res) {
   await releaseExpiredMaintenanceBeds(prisma);
   const body = req.body || {};
@@ -910,11 +1107,32 @@ async function createAdmission(req, res) {
   const doctorId = normalizeString(body.doctorId);
   const wardId = normalizeString(body.wardId);
   const bedId = normalizeString(body.bedId);
-  const nurseId = normalizeString(body.nurseId);
   const department = normalizeString(body.department) || null;
   const admissionType = normalizeString(body.admissionType) || null;
   const admissionDate = parseDateOnly(body.admissionDate) || new Date();
   const status = normalizeAdmissionStatus(body.status) || 'ADMITTED';
+  const notesText = buildAdmissionNotesText({
+    diagnosis: body.diagnosis,
+    notes: body.notes,
+    expectedStay: body.expectedStay,
+  });
+  const emergencyName = normalizeString(body.emergencyName) || null;
+  const emergencyPhone = normalizeString(body.emergencyPhone) || null;
+
+  const userId = req.user?.userId || req.user?.id;
+  const userRole = req.user?.role;
+  const nurseId = normalizeString(body.nurseId) || null;
+
+  // Pre-validate nurse if provided (before the admission transaction)
+  const assignAllowed = await canUserAssignNurse(userId, userRole);
+  let nurseUser = null;
+  if (nurseId) {
+    if (!assignAllowed) return res.status(403).json({ message: 'Not authorized to assign a nurse directly' });
+    nurseUser = await prisma.user.findUnique({ where: { id: nurseId }, select: { id: true, name: true, role: true, isActive: true } });
+    if (!nurseUser) return res.status(400).json({ message: 'Nurse not found' });
+    if (nurseUser.role !== 'NURSE') return res.status(400).json({ message: 'Selected user is not a nurse' });
+    if (!nurseUser.isActive) return res.status(400).json({ message: 'Nurse is inactive' });
+  }
 
   const billing = body.billing || {};
   let admissionCharge = Number.isFinite(Number(billing.admissionCharge)) ? Math.trunc(Number(billing.admissionCharge)) : 0;
@@ -944,23 +1162,17 @@ async function createAdmission(req, res) {
   const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, select: { id: true, user: { select: { name: true, isActive: true } } } });
   if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
   if (!doctor.user?.isActive) return res.status(403).json({ message: 'Doctor is inactive' });
-  let assignedNurse = null;
-  if (nurseId) {
-    assignedNurse = await prisma.user.findUnique({
-      where: { id: nurseId },
-      select: { id: true, role: true, isActive: true },
-    });
-    if (!assignedNurse || assignedNurse.role !== 'NURSE') {
-      return res.status(404).json({ message: 'Nurse not found' });
-    }
-    if (!assignedNurse.isActive) {
-      return res.status(403).json({ message: 'Nurse is inactive' });
-    }
-  }
-
   const txOptions = { maxWait: 10_000, timeout: 25_000 };
 
-  const created = await prisma.$transaction(async (tx) => {
+  let created;
+  try {
+    created = await prisma.$transaction(async (tx) => {
+    const openAdmission = await tx.admission.findFirst({
+      where: isOpenAdmissionWhere({ patientId: patient.id }),
+      select: { id: true, ipdNumber: true },
+    });
+    if (openAdmission) throw new Error('PATIENT_ALREADY_ADMITTED');
+
     const bed = await tx.bed.findUnique({
       where: { id: bedId },
       select: { id: true, status: true, code: true, wardId: true },
@@ -984,7 +1196,6 @@ async function createAdmission(req, res) {
         ipdNumber,
         patientId: patient.id,
         doctorId: doctor.id,
-        ...(admissionSupportsAssignedNurse() && assignedNurse?.id ? { nurseId: assignedNurse.id } : {}),
         wardId,
         bedId,
         bedNumber: bed.code,
@@ -992,12 +1203,23 @@ async function createAdmission(req, res) {
         admissionType,
         admissionDate,
         status,
+        notesText,
         billing: {
           create: { admissionCharge, roomChargePerDay, advance, paymentMode, paymentStatus },
         },
       },
       select: { id: true, ipdNumber: true, admissionDate: true, status: true, patientId: true },
     });
+
+    if (emergencyName || emergencyPhone) {
+      await tx.patient.update({
+        where: { id: patient.id },
+        data: {
+          ...(emergencyName ? { emergencyName } : {}),
+          ...(emergencyPhone ? { emergencyPhone } : {}),
+        },
+      });
+    }
 
     // Sync ReceptionVisit to IPD
     const dayStart = toStartOfDay(admissionDate);
@@ -1021,10 +1243,137 @@ async function createAdmission(req, res) {
       });
     }
 
+    await clearReferAdmitForPatient(tx, patient.id);
+
     return admission;
   }, txOptions);
+  } catch (e) {
+    const msg = e?.message;
+    if (msg === 'PATIENT_ALREADY_ADMITTED') {
+      return res.status(409).json({ message: 'Patient already has an active IPD admission' });
+    }
+    if (msg === 'BED_NOT_FOUND') return res.status(404).json({ message: 'Bed not found' });
+    if (msg === 'BED_WARD_MISMATCH') return res.status(400).json({ message: 'Selected bed does not belong to the chosen ward' });
+    if (msg === 'BED_NOT_AVAILABLE') return res.status(409).json({ message: 'Bed not available' });
+    console.error('createAdmission', e);
+    return res.status(500).json({ message: 'Could not create admission' });
+  }
 
-  return res.status(201).json({ admission: created });
+  let allocationRequestId = null;
+  let nurseAssigned = false;
+
+  if (nurseUser) {
+    // Night-shift: nurse already validated above
+    try {
+      // Set nurseId directly on admission
+      await prisma.admission.update({
+        where: { id: created.id },
+        data: { nurseId: nurseUser.id },
+      });
+
+      const receptionName = req.user?.name || 'Receptionist';
+      const shiftLabel = (await getUserCurrentShiftType(userId)) || 'DAY';
+
+      const allocation = await createApprovedAllocationWithAssignment(prisma, {
+        patientId: patient.id,
+        uhid: patient.uhid,
+        patientName: patient.name,
+        admissionId: created.id,
+        sourceModule: 'IPD',
+        department,
+        requestedStaffType: 'NURSE',
+        reason: `Night IPD admit — nurse assigned by reception. Department: ${department || 'general'} ward`,
+        priority: 'MEDIUM',
+        assignedToId: nurseUser.id,
+        assignedToName: nurseUser.name,
+        assignedById: userId,
+        assignedByName: receptionName,
+        assignedShift: shiftLabel,
+        remarks: JSON.stringify({ assignedBy: 'NIGHT_RECEPTION', receptionistId: userId, receptionistName: receptionName }),
+      });
+      allocationRequestId = allocation.id;
+      nurseAssigned = true;
+
+      // Notify the assigned nurse
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: nurseUser.id,
+            type: 'ALERT',
+            severity: 'INFO',
+            title: 'New Patient Assigned',
+            message: `Patient ${patient.name} (${patient.uhid}) has been assigned to you. Admitted to ${department || 'general'} ward. (Night reception assignment)`,
+          },
+        });
+      } catch (notifyErr) {
+        console.error('Night reception nurse notification error:', notifyErr.message);
+      }
+    } catch (err) {
+      console.error('Night reception nurse assignment failed:', err.message);
+      // Fall back to HR pending request
+      try {
+        await createPendingAllocationRequest(prisma, {
+          patientId: patient.id, uhid: patient.uhid, patientName: patient.name,
+          admissionId: created.id, sourceModule: 'IPD', department,
+          requestedStaffType: 'NURSE',
+          reason: `Nurse required for patient admitted to ${department || 'general'} ward`,
+          priority: 'MEDIUM',
+          requestedById: userId || '00000000-0000-0000-0000-000000000000',
+          requestedByName: req.user?.name || 'System',
+        });
+      } catch (fallbackErr) {
+        console.error('Fallback allocation request failed:', fallbackErr.message);
+      }
+    }
+  } else if (assignAllowed) {
+    // Night receptionist but no nurse selected → fall back to HR pending request
+    try {
+      await createPendingAllocationRequest(prisma, {
+        patientId: patient.id, uhid: patient.uhid, patientName: patient.name,
+        admissionId: created.id, sourceModule: 'IPD', department,
+        requestedStaffType: 'NURSE',
+        reason: `Nurse required for patient admitted to ${department || 'general'} ward`,
+        priority: 'MEDIUM',
+        requestedById: userId || '00000000-0000-0000-0000-000000000000',
+        requestedByName: req.user?.name || 'System',
+      });
+    } catch (err) {
+      console.error('Failed to create allocation request for admission:', err.message);
+    }
+  } else {
+    // Day receptionist → standard HR pending request
+    try {
+      await createPendingAllocationRequest(prisma, {
+        patientId: patient.id, uhid: patient.uhid, patientName: patient.name,
+        admissionId: created.id, sourceModule: 'IPD', department,
+        requestedStaffType: 'NURSE',
+        reason: `Nurse required for patient admitted to ${department || 'general'} ward`,
+        priority: 'MEDIUM',
+        requestedById: userId || '00000000-0000-0000-0000-000000000000',
+        requestedByName: req.user?.name || 'System',
+      });
+    } catch (err) {
+      console.error('Failed to create allocation request for admission:', err.message);
+    }
+  }
+
+  if (admissionType === 'ICU' || department === 'Emergency & Trauma Care') {
+    const title = admissionType === 'ICU' ? 'ICU Admission Registered' : 'Emergency Admission Registered';
+    const msg = `Patient ${patient.name || 'Patient'} (${patient.uhid || ''}) admitted to ${admissionType === 'ICU' ? 'ICU' : 'Emergency & Trauma Care'}.`;
+    await triggerCriticalAlert(title, msg);
+  }
+
+  setImmediate(() => {
+    emitAbdmClinicalEvent({
+      type: EVENT.IPD_ADMISSION,
+      sourceId: created.id,
+      patientId: created.patientId || patient.id,
+    }).catch((err) => {
+      console.error('[abdm-hr] IPD emit failed', created.id, err?.message);
+    });
+  });
+
+  return res.status(201).json({ admission: created, hrRequest: !nurseAssigned, nurseAssigned, allocationRequestId });
 }
 
 async function transferBed(req, res) {
@@ -1295,11 +1644,16 @@ async function dischargeAdmission(req, res) {
           admissionId: true,
           visitType: true,
           billDate: true,
+          createdAt: true,
+          notes: true,
           payments: { select: { amount: true } },
+          lineItems: { select: { description: true } },
+          labOrders: { select: { id: true } },
+          otRequest: { select: { id: true } },
         },
       });
       const unpaid = allPatientBills.filter(
-        (b) => billBelongsToAdmissionStay(b, admission) && billPendingAmount(b) > 0,
+        (b) => billBelongsToAdmissionStay(b, admission) && billPendingAmount(b) > 0 && !isLabRelatedBill(b),
       );
       if (unpaid.length) throw new Error('BILLING_NOT_CLEAR');
     }
@@ -1315,6 +1669,45 @@ async function dischargeAdmission(req, res) {
     });
     const labBlocked = labOrders.some((lo) => String(lo.status || '').toUpperCase() === 'PENDING_BILLING');
     if (labBlocked) throw new Error('LAB_NOT_CLEAR');
+
+    if (!dischargeWithDues) {
+      const allPatientBillsForLab = await tx.bill.findMany({
+        where: {
+          patientId: admission.patientId,
+          NOT: { status: 'CANCELLED' },
+        },
+        select: {
+          totalAmount: true,
+          paidAmount: true,
+          status: true,
+          billNumber: true,
+          admissionId: true,
+          visitType: true,
+          billDate: true,
+          createdAt: true,
+          notes: true,
+          payments: { select: { amount: true } },
+          lineItems: { select: { description: true } },
+          labOrders: { select: { id: true } },
+          otRequest: { select: { id: true } },
+        },
+      });
+      const unpaidLabBills = allPatientBillsForLab.filter(
+        (b) =>
+          billOnOrAfterAdmission(b, admission) &&
+          billPendingAmount(b) > 0 &&
+          isLabRelatedBill(b),
+      );
+      if (unpaidLabBills.length) throw new Error('LAB_BILL_NOT_CLEAR');
+      const unpaidOtBills = allPatientBillsForLab.filter(
+        (b) =>
+          billOnOrAfterAdmission(b, admission) &&
+          billPendingAmount(b) > 0 &&
+          isOtRelatedBill(b) &&
+          !isLabRelatedBill(b),
+      );
+      if (unpaidOtBills.length) throw new Error('OT_BILL_NOT_CLEAR');
+    }
 
     // Vacated bed: housekeeping / turnover — MAINTENANCE for 1h, then AVAILABLE (see releaseExpiredMaintenanceBeds).
     if (admission.bedId) {
@@ -1354,10 +1747,24 @@ async function dischargeAdmission(req, res) {
       await tx.receptionVisit.update({ where: { id: latestVisit.id }, data: { visitType: 'IPD', status: 'DISCHARGED' } });
     }
 
+    await clearReferAdmitForPatient(tx, admission.patientId);
+
     return row;
   },
     { maxWait: 10_000, timeout: 25_000 },
   );
+
+  if (updated?.dischargeDate) {
+    setImmediate(() => {
+      emitAbdmClinicalEvent({
+        type: EVENT.DISCHARGE,
+        sourceId: updated.id,
+        patientId: updated.patientId,
+      }).catch((err) => {
+        console.error('[abdm-hr] DS emit failed', updated.id, err?.message);
+      });
+    });
+  }
 
   return res.json({ admission: updated });
   } catch (e) {
@@ -1376,6 +1783,16 @@ async function dischargeAdmission(req, res) {
     if (msg === 'LAB_NOT_CLEAR') {
       return res.status(400).json({
         message: 'Lab orders are still pending billing. Complete lab billing before final discharge.',
+      });
+    }
+    if (msg === 'LAB_BILL_NOT_CLEAR') {
+      return res.status(400).json({
+        message: 'Lab bills are still unpaid. Collect lab bill payment before final discharge.',
+      });
+    }
+    if (msg === 'OT_BILL_NOT_CLEAR') {
+      return res.status(400).json({
+        message: 'OT bills are still unpaid. Collect OT bill payment before final discharge.',
       });
     }
     console.error('dischargeAdmission', e);
@@ -1427,9 +1844,12 @@ module.exports = {
   listNurseLookup,
   listActiveAdmissions,
   listPendingDoctorReferrals,
+  fulfillDoctorReferral,
   listNurseApprovedDischargeQueue,
   getDischargeClearances,
   getAdmissionDetail,
+  canAssignNurse,
+  listAvailableNurses,
   createAdmission,
   transferBed,
   listTransferHistory,

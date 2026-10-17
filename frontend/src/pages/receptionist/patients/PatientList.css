@@ -86,9 +86,7 @@
   padding: 14px 16px;
   border-bottom: 1px solid rgba(15, 45, 94, 0.08);
   background:
-    radial-gradient(900px 220px at 20% 0%, rgba(29, 78, 216, 0.14), transparent 55%),
-    radial-gradient(700px 220px at 85% 20%, rgba(14, 165, 233, 0.10), transparent 55%),
-    linear-gradient(135deg, rgba(15, 45, 94, 0.06), rgba(26, 74, 138, 0.03));
+  background: #f8faff;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -253,14 +251,14 @@
 }
 
 .pl-actionBtnPrimary {
-  background: linear-gradient(135deg, #1d4ed8, #0d6ebd);
+  background: #0077B6;
   border-color: rgba(29, 78, 216, 0.30);
   color: #ffffff;
   box-shadow: 0 10px 24px rgba(29, 78, 216, 0.20);
 }
 .pl-actionBtnPrimary:hover {
   filter: brightness(0.98);
-  background: linear-gradient(135deg, #1e40af, #0284c7);
+  background: #0077B6;
   border-color: rgba(29, 78, 216, 0.40);
   color: #ffffff;
 }
@@ -295,4 +293,7 @@
     max-height: calc(100dvh - 24px);
   }
 }
+
+
+
 

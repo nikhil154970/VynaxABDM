@@ -310,7 +310,7 @@ export default function ConsultationHistory() {
         th,td{border:1px solid #e2e8f0;padding:8px;text-align:left;}
         th{background:#f8fafc;}
       </style></head><body>
-        <h1>New H.T. Hospital — Prescription</h1>
+        <h1>MQE HIMS — Prescription</h1>
         <p><strong>${patient?.name || 'Patient'}</strong> · UHID ${patient?.uhid || '—'} · ${formatDate(c.date)}</p>
         <p>Dr. ${c.doctor} · ${c.department}</p>
         <table><thead><tr><th>Medicine</th><th>Dosage</th><th>Duration</th><th>Mode</th></tr></thead><tbody>${meds}</tbody></table>
@@ -388,7 +388,7 @@ export default function ConsultationHistory() {
                   value={masterSearchInput}
                   onChange={(e) => setMasterSearchInput(e.target.value)}
                   placeholder="Search name, UHID, mobile…"
-                  className="pl-select w-full pl-10 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white"
+                  className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white outline-none focus:border-[#0077B6] focus:ring-1 focus:ring-[#0077B6]/20 transition-all"
                   aria-label="Search consulted patients"
                 />
               </div>

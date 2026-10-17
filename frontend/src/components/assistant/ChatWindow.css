@@ -1,0 +1,51 @@
+/* =====================================================
+   ChatWindow.css - Scrollable message list (blue theme)
+   ===================================================== */
+
+.chat-window {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.25) transparent;
+  padding-right: 4px;
+}
+
+.chat-window::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-window::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-window::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.25);
+  border-radius: 999px;
+}
+
+.chat-window__messages {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 10px 4px 8px 4px;
+  gap: 12px;
+  min-height: 100%;
+}
+
+.chat-window__typing-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 2px 0;
+  animation: fade-up 0.2s ease both;
+}
+
+.chat-window__anchor {
+  height: 1px;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

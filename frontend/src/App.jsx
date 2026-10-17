@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import SessionGuard from './components/SessionGuard';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -10,6 +11,9 @@ import DoctorRoutes from './pages/doctor/DoctorRoutes';
 import NurseRoutes from './pages/nurse/NurseRoutes';
 import LabRoutes from './pages/lab/LabRoutes';
 import PharmacyRoutes from './pages/pharmacy/PharmacyRoutes';
+import OtRoutes from './pages/ot/OtRoutes';
+import HrRoutes from './pages/hr/HrRoutes';
+import PatientRoutes from './pages/patient/PatientRoutes';
 
 const ComingSoon = ({ page }) => (
   <div className="p-8 flex items-center justify-center h-full">
@@ -24,6 +28,7 @@ const ComingSoon = ({ page }) => (
 export default function App() {
   return (
     <AuthProvider>
+      <SessionGuard />
       <Routes>
         <Route path="/login" element={<Login />} />
 
@@ -65,9 +70,15 @@ export default function App() {
             <Layout><PharmacyRoutes /></Layout>
           </ProtectedRoute>
         } />
-        <Route path="/dashboard/hr" element={
+        <Route path="/dashboard/hr/*" element={
           <ProtectedRoute allowedRoles={['hr_manager', 'super_admin']}>
-            <Layout><ComingSoon page="HR Dashboard" /></Layout>
+            <Layout><HrRoutes /></Layout>
+          </ProtectedRoute>
+        } />
+        {/* OT */}
+        <Route path="/dashboard/ot/*" element={
+          <ProtectedRoute allowedRoles={['ot_technician', 'super_admin']}>
+            <Layout><OtRoutes /></Layout>
           </ProtectedRoute>
         } />
         <Route path="/dashboard/finance" element={
@@ -75,6 +86,9 @@ export default function App() {
             <Layout><ComingSoon page="Finance Dashboard" /></Layout>
           </ProtectedRoute>
         } />
+
+        {/* Patient Portal */}
+        <Route path="/patient/*" element={<PatientRoutes />} />
 
         <Route path="/unauthorized" element={
           <div className="min-h-screen flex items-center justify-center">

@@ -8,6 +8,9 @@ const {
   getBillDetail,
   getBillingContext,
   listPatientPayments,
+  getPatientLedger,
+  getAdmissionPharmacyBills,
+  collectAdmissionPackage,
   createBill,
   addBillPayment,
 } = require('./billing.controller');
@@ -46,6 +49,25 @@ router.get(
   listPatientPayments
 );
 
+router.get(
+  '/patient-ledger',
+  ...receptionistOnly,
+  [query('patientId').isUUID().withMessage('patientId must be a valid uuid')],
+  validateRequest,
+  getPatientLedger
+);
+
+router.get(
+  '/pharmacy-bills',
+  ...receptionistOnly,
+  [
+    query('patientId').optional().isUUID().withMessage('patientId must be a valid uuid'),
+    query('admissionId').optional().isUUID().withMessage('admissionId must be a valid uuid'),
+  ],
+  validateRequest,
+  getAdmissionPharmacyBills
+);
+
 router.get('/:id', ...receptionistOnly, [param('id').isUUID().withMessage('id must be a valid uuid')], validateRequest, getBillDetail);
 
 router.post(
@@ -59,6 +81,18 @@ router.post(
   ],
   validateRequest,
   createBill
+);
+
+router.post(
+  '/admissions/:admissionId/collect',
+  ...receptionistOnly,
+  [
+    param('admissionId').isUUID().withMessage('admissionId must be a valid uuid'),
+    body('amount').optional().isInt({ min: 0 }),
+    body('mode').optional().isString(),
+  ],
+  validateRequest,
+  collectAdmissionPackage
 );
 
 router.post(

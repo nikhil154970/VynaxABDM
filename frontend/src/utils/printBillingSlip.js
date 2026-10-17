@@ -1,6 +1,6 @@
 import { isAyushmanSponsor, slipSponsorBannerHtml, AYUSHMAN_PAYMENT_LABEL } from './ayushmanBilling';
 import { hospitalMobileSlipHtml } from './hospitalContact';
-import { printSlipHeaderTextHtml } from './hospitalBranding';
+import { BILLING_SLIP_LOGO, printBillingSlipHeaderHtml } from './hospitalBranding';
 
 function safeText(v) {
   const s = v == null ? '' : String(v);
@@ -51,6 +51,9 @@ export async function printBillingSlip({ billId, data }) {
         paid: totalsRaw.paid ?? 0,
         pending: totalsRaw.pending ?? 0,
       };
+  const advance = data.visitType === 'IPD' ? Math.max(0, Number(data.advance || data.advancePaid || totalsRaw.advance || 0)) : 0;
+  const netDues = Math.max(0, totals.total - advance);
+
   if (ayushman) {
     data.paymentStatus = 'Paid';
     data.paymentMode = AYUSHMAN_PAYMENT_LABEL;
@@ -182,10 +185,10 @@ export async function printBillingSlip({ billId, data }) {
         </svg>
 
         <div class="logo-box">
-          <img src="/hopital_logo.png" alt="NH" />
+          <img src="${BILLING_SLIP_LOGO}" alt="VyanX Hospital Management System" />
         </div>
 
-        <div class="header-text">${printSlipHeaderTextHtml()}
+        <div class="header-text">${printBillingSlipHeaderHtml()}
         </div>
       </div>
 
@@ -283,9 +286,24 @@ export async function printBillingSlip({ billId, data }) {
           <td class="val">₹${safeText(fmtMoney(totals.taxAmt))}</td>
         </tr>
         <tr>
-          <td class="label">Net Payable :</td>
+          <td class="label">Total :</td>
           <td class="val">₹${safeText(fmtMoney(totals.total))}</td>
         </tr>
+        ${
+          advance > 0
+            ? `<tr>
+                <td class="label">Advance Payment :</td>
+                <td class="val">₹${safeText(fmtMoney(advance))}</td>
+              </tr>
+              <tr>
+                <td class="label">Net Payable :</td>
+                <td class="val">₹${safeText(fmtMoney(netDues))}</td>
+              </tr>`
+            : `<tr>
+                <td class="label">Net Payable :</td>
+                <td class="val">₹${safeText(fmtMoney(totals.total))}</td>
+              </tr>`
+        }
         <tr>
           <td class="label">Paid :</td>
           <td class="val">${ayushman ? `<b>${safeText(AYUSHMAN_PAYMENT_LABEL)}</b>` : `₹${safeText(fmtMoney(totals.paid))}`}</td>

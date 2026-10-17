@@ -13,6 +13,7 @@ import PharmacyBillingHistory from './billing/PharmacyBillingHistory';
 import ReturnsPage from './returns/ReturnsPage';
 import ReportsPage from './reports/ReportsPage';
 import PharmacyProfile from './PharmacyProfile';
+import PharmacyOtIssue from './PharmacyOtIssue';
 
 function PharmacyPlaceholder({ title }) {
   return (
@@ -41,6 +42,7 @@ export default function PharmacyRoutes() {
       <Route path="suppliers" element={<PharmacySuppliers />} />
       <Route path="returns" element={<ReturnsPage />} />
       <Route path="reports" element={<ReportsPage />} />
+      <Route path="ot-issue" element={<PharmacyOtIssue />} />
       <Route path="profile" element={<PharmacyProfile />} />
       <Route path="*" element={<Navigate to="/dashboard/pharmacy" replace />} />
     </Routes>

@@ -361,16 +361,24 @@ async function deleteDoctor(req, res) {
     const deleted = await prisma.$transaction(async (tx) => {
       const doctor = await tx.doctor.findUnique({ where: { id }, select: { id: true, userId: true } });
       if (!doctor) return null;
-      await tx.doctorAvailability.deleteMany({ where: { doctorId: id } });
-      await tx.doctor.delete({ where: { id } });
-      // Keep the user account (so audit trail remains); just deactivate it.
-      await tx.user.update({ where: { id: doctor.userId }, data: { isActive: false } });
+      
+      try {
+        await tx.doctorAvailability.deleteMany({ where: { doctorId: id } });
+        await tx.doctor.delete({ where: { id } });
+        try {
+          await tx.user.delete({ where: { id: doctor.userId } });
+        } catch (errUser) {
+          await tx.user.update({ where: { id: doctor.userId }, data: { isActive: false } });
+        }
+      } catch (errDoc) {
+        await tx.user.update({ where: { id: doctor.userId }, data: { isActive: false } });
+      }
       return doctor;
     });
 
     if (!deleted) return res.status(404).json({ message: 'Doctor not found' });
     await createActivityLog({ userId: req.user?.userId, action: 'UPDATE_STATUS', module: 'USER' });
-    return res.json({ success: true });
+    return res.json({ success: true, message: 'Doctor deactivated or deleted successfully' });
   } catch (err) {
     if (err && err.code === 'P2025') return res.status(404).json({ message: 'Doctor not found' });
     throw err;
@@ -418,6 +426,118 @@ async function listAvailability(req, res) {
   return res.json({ slots });
 }
 
+async function listTimeSlots(req, res) {
+  const { id } = req.params;
+  const dateStr = String(req.query.date || '').trim();
+  if (!dateStr) return res.status(400).json({ message: 'date is required (YYYY-MM-DD)' });
+
+  if (Number.isNaN(new Date(dateStr + 'T00:00:00').getTime())) return res.status(400).json({ message: 'Invalid date' });
+
+  const doctor = await prisma.doctor.findUnique({ where: { id }, select: { id: true, userId: true } });
+  if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+
+  const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  const dayOfWeek = dayNames[new Date(y, mo - 1, d).getDay()];
+
+  const dayStart = new Date(`${dateStr}T00:00:00`);
+  const dayEnd = new Date(`${dateStr}T23:59:59`);
+
+  // Check if doctor has a specific shift assignment for this date from HR
+  const shiftAss = await prisma.shiftAssignment.findFirst({
+    where: {
+      employeeId: doctor.userId,
+      assignedDate: { gte: dayStart, lte: dayEnd },
+    },
+    include: { shift: true },
+  });
+
+  const avail = await prisma.doctorAvailability.findUnique({
+    where: { doctorId_dayOfWeek: { doctorId: id, dayOfWeek } },
+  });
+
+  const anyAvail = await prisma.doctorAvailability.findFirst({
+    where: { doctorId: id, isAvailable: true },
+    select: { startTime: true, endTime: true },
+    orderBy: [{ dayOfWeek: 'asc' }],
+  });
+
+  // If this day is explicitly set as unavailable, and NO shift assignment overrides it, return empty
+  if (!shiftAss && avail && !avail.isAvailable) {
+    return res.json({ slots: [], message: 'Doctor not available on this day' });
+  }
+
+  // Determine active start/end time. Priority: ShiftAssignment > doctorAvailability > Default 9AM-5PM
+  let startTime = '09:00';
+  let endTime = '17:00';
+
+  if (shiftAss?.shift) {
+    startTime = shiftAss.shift.startTime;
+    endTime = shiftAss.shift.endTime;
+  } else if (avail) {
+    startTime = avail.startTime;
+    endTime = avail.endTime;
+  } else if (anyAvail) {
+    startTime = anyAvail.startTime;
+    endTime = anyAvail.endTime;
+  }
+
+  const toMins = (t) => {
+    const [h, m] = String(t).split(':').map(Number);
+    return h * 60 + (m || 0);
+  };
+
+  const startMins = toMins(startTime);
+  let endMins = toMins(endTime);
+
+  // If shift spans across midnight or is exactly 24 hours (e.g. end <= start)
+  if (endMins <= startMins) {
+    endMins += 1440;
+  }
+
+  const slots = [];
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const isToday = dateStr === todayStr;
+  const currentMins = now.getHours() * 60 + now.getMinutes();
+
+  for (let m = startMins; m < endMins; m += 30) {
+    const minOfDay = m % 1440;
+    const hh = String(Math.floor(minOfDay / 60)).padStart(2, '0');
+    const mm = String(minOfDay % 60).padStart(2, '0');
+    const label = `${hh}:${mm}`;
+
+    const isPast = isToday && (m < 1440 ? m < currentMins : false);
+    slots.push({ label, available: !isPast, past: isPast });
+  }
+
+  // Mark already booked slots
+  const booked = await prisma.appointment.findMany({
+    where: {
+      doctorId: id,
+      date: { gte: dayStart, lte: dayEnd },
+      time: { not: null },
+    },
+    select: { time: true },
+  });
+
+  const bookedSet = new Set(booked.map((b) => String(b.time).trim()));
+
+  for (const s of slots) {
+    if (bookedSet.has(s.label)) {
+      s.available = false;
+      s.booked = true;
+    }
+  }
+
+  const hasUpcoming = slots.some((s) => !s.past);
+  const message = isToday && !hasUpcoming
+    ? "Today's slots are over. Please choose another date."
+    : null;
+
+  return res.json({ date: dateStr, dayOfWeek, slots, message });
+}
+
 async function upsertAvailability(req, res) {
   const { id } = req.params;
   const { slots } = req.body;
@@ -457,5 +577,6 @@ module.exports = {
   patchDoctorStatus,
   listAvailability,
   upsertAvailability,
+  listTimeSlots,
 };
 

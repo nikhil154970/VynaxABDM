@@ -65,12 +65,12 @@ export default function AllPatients() {
   };
 
   return (
-    <div className="p-6 sm:p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+    <div className="p-6 space-y-6">
+      <div className="max-w-[1600px] mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900">{title}</h1>
+            <p className="text-xs md:text-sm text-gray-500 mt-1">
               Search and review every registered patient across OPD, IPD, billing, and lab.
             </p>
           </div>
@@ -84,13 +84,13 @@ export default function AllPatients() {
               value={qInput}
               onChange={(e) => setQInput(e.target.value)}
               placeholder="Name, UHID, mobile, reg. no."
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0077B6]/25 focus:border-[#0077B6] transition"
             />
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl ring-1 ring-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-gray-800">Patient directory</p>
               <p className="text-xs text-gray-400 mt-0.5">
@@ -103,50 +103,50 @@ export default function AllPatients() {
           </div>
 
           {error && (
-            <div className="px-5 py-3 bg-rose-50 text-rose-700 text-sm border-b border-rose-100">{error}</div>
+            <div className="px-6 py-3 bg-rose-50 text-rose-800 text-sm border-b border-rose-100 font-semibold">{error}</div>
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="text-left font-semibold px-5 py-3">UHID / Reg</th>
-                  <th className="text-left font-semibold px-5 py-3">Name</th>
-                  <th className="text-left font-semibold px-5 py-3">Mobile</th>
-                  <th className="text-left font-semibold px-5 py-3">Age / Gender</th>
-                  <th className="text-left font-semibold px-5 py-3">Last visit</th>
-                  <th className="text-left font-semibold px-5 py-3">Activity</th>
-                  <th className="text-right font-semibold px-5 py-3">Actions</th>
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-[#001B48] text-left text-xs font-semibold uppercase tracking-wide text-white border-b border-[#001B48]">
+                  <th className="px-4 py-3 whitespace-nowrap">UHID / Reg</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Name</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Mobile</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Age / Gender</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Last visit</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Activity</th>
+                  <th className="px-4 py-3 whitespace-nowrap text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td className="px-5 py-8 text-gray-400" colSpan={7}>
+                    <td className="px-4 py-8 text-gray-400 text-center font-semibold" colSpan={7}>
                       Loading patients…
                     </td>
                   </tr>
                 ) : patients.length === 0 ? (
                   <tr>
-                    <td className="px-5 py-8 text-gray-400" colSpan={7}>
+                    <td className="px-4 py-8 text-gray-400 text-center font-semibold" colSpan={7}>
                       No patients match your search.
                     </td>
                   </tr>
                 ) : (
                   patients.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50/60">
-                      <td className="px-5 py-3">
+                    <tr key={p.id} className="hover:bg-[#D6E8EE] transition">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <div className="font-mono text-xs text-gray-800">{p.uhid || '—'}</div>
                         {p.registrationNumber && (
                           <div className="text-[11px] text-gray-400 mt-0.5">{p.registrationNumber}</div>
                         )}
                       </td>
-                      <td className="px-5 py-3 font-semibold text-gray-900">{p.name || '—'}</td>
-                      <td className="px-5 py-3 text-gray-600">{p.mobile || '—'}</td>
-                      <td className="px-5 py-3 text-gray-600">
+                      <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">{p.name || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{p.mobile || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         {[p.age != null ? `${p.age} yrs` : null, p.gender].filter(Boolean).join(' · ') || '—'}
                       </td>
-                      <td className="px-5 py-3 text-gray-600 text-xs">
+                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
                         {p.lastVisit ? (
                           <>
                             <div>{formatDate(p.lastVisit.visitDate)}</div>
@@ -158,7 +158,7 @@ export default function AllPatients() {
                           <span className="text-gray-400">No visits yet</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-xs text-gray-500">
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
                         <div className="flex flex-wrap gap-1">
                           <Badge variant="blue">V {p.counts?.visits ?? 0}</Badge>
                           <Badge variant="purple">A {p.counts?.appointments ?? 0}</Badge>
@@ -167,11 +167,11 @@ export default function AllPatients() {
                           <Badge variant="gray">L {p.counts?.labOrders ?? 0}</Badge>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => goHistory(p.id)}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                          className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-xs font-semibold border border-[#0077B6] text-[#0077B6] hover:bg-[#90E0EF]/15 active:bg-[#001B48]/5 transition cursor-pointer"
                         >
                           Full history
                         </button>
@@ -183,7 +183,7 @@ export default function AllPatients() {
             </table>
           </div>
 
-          <div className="px-5 pb-4">
+          <div className="px-6 py-4 border-t border-gray-100">
             <Pagination
               page={pagination.page || 1}
               totalPages={pagination.totalPages || 1}

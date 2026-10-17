@@ -7,6 +7,7 @@ const ROLE_DASHBOARD = {
   lab_technician: '/dashboard/lab',
   pharmacist: '/dashboard/pharmacy',
   hr_manager: '/dashboard/hr',
+  ot_technician: '/dashboard/ot',
 };
 
 const normalizeRoleKey = (role) => {

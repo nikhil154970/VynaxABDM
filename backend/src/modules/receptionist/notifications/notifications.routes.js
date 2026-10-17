@@ -3,9 +3,11 @@ const { param } = require('express-validator');
 const { validateRequest } = require('../../../middleware/validateRequest');
 const { authMiddleware } = require('../../../middleware/authMiddleware');
 const { roleMiddleware } = require('../../../middleware/roleMiddleware');
-const { listNotifications, markRead, markAllRead } = require('./notifications.controller');
+const { listNotifications, markRead, markAllRead, getModuleCounts } = require('./notifications.controller');
 
 const router = express.Router();
+
+router.get('/module-counts', authMiddleware, roleMiddleware(['RECEPTIONIST', 'SUPER_ADMIN']), getModuleCounts);
 
 router.get('/', authMiddleware, roleMiddleware(['RECEPTIONIST', 'SUPER_ADMIN']), listNotifications);
 

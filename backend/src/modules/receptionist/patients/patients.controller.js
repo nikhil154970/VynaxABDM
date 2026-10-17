@@ -1,4 +1,6 @@
+const bcrypt = require('bcrypt');
 const { prisma } = require('../../../config/prisma');
+const { triggerCriticalAlert } = require('../../../lib/notificationHelpers');
 const {
   isAyushmanSponsor,
   applyAyushmanVisitBilling,
@@ -16,6 +18,26 @@ function parseOptionalInt(v) {
   return Math.trunc(n);
 }
 
+function parsePhrAddress(input) {
+  if (input == null || input === '') return null;
+  if (Array.isArray(input)) {
+    const cleaned = input.map((x) => normalizeString(x)).filter(Boolean);
+    return cleaned.length ? cleaned : null;
+  }
+  const raw = normalizeString(input);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      const cleaned = parsed.map((x) => normalizeString(x)).filter(Boolean);
+      return cleaned.length ? cleaned : null;
+    }
+  } catch {
+    // fall through
+  }
+  return [raw];
+}
+
 function toStartOfDay(d) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -27,6 +49,8 @@ function toEndOfDay(d) {
   x.setHours(23, 59, 59, 999);
   return x;
 }
+
+const OPEN_ADMISSION_STATUSES = ['ADMITTED', 'UNDER_TREATMENT', 'DISCHARGE_REQUESTED'];
 
 function calculateAgeFromDob(dob) {
   if (!dob) return null;
@@ -105,6 +129,23 @@ function flattenVisitRow(row) {
     age: row.patient?.age ?? calculateAgeFromDob(row.patient?.dob),
     gender: genderLabel,
     address: row.patient?.address || '',
+    abhaNumber: row.patient?.abhaNumber || row.patient?.healthIdNumber || '',
+    abhaAddress: row.patient?.abhaAddress || '',
+    abhaStatus: row.patient?.abhaStatus || '',
+    phrAddress: Array.isArray(row.patient?.phrAddress) ? row.patient.phrAddress : [],
+    healthIdNumber: row.patient?.healthIdNumber || row.patient?.abhaNumber || '',
+    isAbhaVerified: Boolean(row.patient?.isAbhaVerified),
+    mobileVerified: Boolean(row.patient?.mobileVerified),
+    aadhaarVerified: Boolean(row.patient?.aadhaarVerified),
+    abdmVerifiedAt: row.patient?.abdmVerifiedAt || null,
+    hipLinked: Boolean(row.patient?.hipLinked),
+    careContextId: row.patient?.careContextId || '',
+    careContextStatus: row.patient?.careContextStatus || '',
+    linkedAt: row.patient?.linkedAt || null,
+    syncStatus: row.patient?.syncStatus || '',
+    registrationSource: row.patient?.registrationSource || 'RECEPTION',
+    hasPortal: Boolean(row.patient?.patientAuth),
+    portalLoggedIn: Boolean(row.patient?.patientAuth?.lastLoginAt),
     visitType: row.visitType,
     department: row.department || '',
     doctor: row.doctorName || '',
@@ -117,6 +158,50 @@ function flattenVisitRow(row) {
     referBy: row.referBy || '',
     sponsor: row.sponsor || '',
     createdAt: row.createdAt,
+  };
+}
+
+function flattenPatientRow(patient) {
+  return {
+    id: null,
+    patientId: patient.id,
+    uhid: patient.uhid,
+    registrationNumber: patient.registrationNumber || '',
+    name: patient.name,
+    phone: patient.mobile || '',
+    dob: patient.dob || null,
+    age: patient.age ?? null,
+    gender: patient.gender === 'MALE' ? 'Male' : patient.gender === 'FEMALE' ? 'Female' : patient.gender === 'OTHER' ? 'Other' : null,
+    address: patient.address || '',
+    abhaNumber: patient.abhaNumber || patient.healthIdNumber || '',
+    abhaAddress: patient.abhaAddress || '',
+    abhaStatus: patient.abhaStatus || '',
+    phrAddress: Array.isArray(patient.phrAddress) ? patient.phrAddress : [],
+    healthIdNumber: patient.healthIdNumber || patient.abhaNumber || '',
+    isAbhaVerified: Boolean(patient.isAbhaVerified),
+    mobileVerified: Boolean(patient.mobileVerified),
+    aadhaarVerified: Boolean(patient.aadhaarVerified),
+    abdmVerifiedAt: patient.abdmVerifiedAt || null,
+    hipLinked: Boolean(patient.hipLinked),
+    careContextId: patient.careContextId || '',
+    careContextStatus: patient.careContextStatus || '',
+    linkedAt: patient.linkedAt || null,
+    syncStatus: patient.syncStatus || '',
+    registrationSource: patient.registrationSource || 'RECEPTION',
+    hasPortal: Boolean(patient.patientAuth),
+    portalLoggedIn: Boolean(patient.patientAuth?.lastLoginAt),
+    visitType: null,
+    department: '',
+    doctor: '',
+    visitDate: patient.createdAt,
+    token: '',
+    paymentStatus: '',
+    paymentMode: '',
+    registrationFee: null,
+    status: 'Registered',
+    referBy: '',
+    sponsor: '',
+    createdAt: patient.createdAt,
   };
 }
 
@@ -156,6 +241,24 @@ async function registerPatient(req, res) {
     mobile,
     dob,
     aadhaarId: normalizeString(body.aadhaarId) || null,
+    abhaNumber: normalizeString(body.abhaNumber) || null,
+    abhaAddress: normalizeString(body.abhaAddress) || null,
+    abhaStatus: normalizeString(body.abhaStatus) || null,
+    phrAddress: parsePhrAddress(body.phrAddress),
+    healthIdNumber: normalizeString(body.healthIdNumber || body.abhaNumber) || null,
+    isAbhaVerified: Boolean(body.isAbhaVerified) && Boolean(normalizeString(body.abhaNumber) || normalizeString(body.abhaAddress)),
+    mobileVerified: Boolean(body.mobileVerified),
+    aadhaarVerified: Boolean(body.aadhaarVerified),
+    abdmVerifiedAt: (() => {
+      if (body.abdmVerifiedAt) {
+        const d = new Date(body.abdmVerifiedAt);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      if (Boolean(body.isAbhaVerified) && Boolean(normalizeString(body.abhaNumber) || normalizeString(body.abhaAddress))) {
+        return new Date();
+      }
+      return null;
+    })(),
     address,
     bloodGroup: normalizeString(body.bloodGroup) || null,
     allergies: normalizeString(body.allergies) || null,
@@ -215,6 +318,15 @@ async function registerPatient(req, res) {
           age: true,
           gender: true,
           address: true,
+          abhaNumber: true,
+          abhaAddress: true,
+          abhaStatus: true,
+          phrAddress: true,
+          healthIdNumber: true,
+          isAbhaVerified: true,
+          mobileVerified: true,
+          aadhaarVerified: true,
+          abdmVerifiedAt: true,
           regSeq: true,
           registrationNumber: true,
         },
@@ -231,6 +343,15 @@ async function registerPatient(req, res) {
           age: true,
           gender: true,
           address: true,
+          abhaNumber: true,
+          abhaAddress: true,
+          abhaStatus: true,
+          phrAddress: true,
+          healthIdNumber: true,
+          isAbhaVerified: true,
+          mobileVerified: true,
+          aadhaarVerified: true,
+          abdmVerifiedAt: true,
           regSeq: true,
           registrationNumber: true,
         },
@@ -250,6 +371,15 @@ async function registerPatient(req, res) {
           age: true,
           gender: true,
           address: true,
+          abhaNumber: true,
+          abhaAddress: true,
+          abhaStatus: true,
+          phrAddress: true,
+          healthIdNumber: true,
+          isAbhaVerified: true,
+          mobileVerified: true,
+          aadhaarVerified: true,
+          abdmVerifiedAt: true,
           regSeq: true,
           registrationNumber: true,
         },
@@ -284,37 +414,103 @@ async function registerPatient(req, res) {
         },
       });
     } else {
-      visit = await tx.receptionVisit.create({
-        data: {
-          patientId: patient.id,
-          visitType,
-          status,
-          visitDate,
-          token,
-          queueNumber,
-          department,
-          doctorName,
-          registrationFee,
-          paymentMode,
-          paymentStatus,
-          referBy,
-          sponsor,
-        },
-        include: {
-          patient: {
-            select: {
-              uhid: true,
-              name: true,
-              mobile: true,
-              dob: true,
-              age: true,
-              gender: true,
-              address: true,
-              registrationNumber: true,
+      // Edit mode without visitId: update the latest existing visit instead of creating duplicate
+      const existingVisit = await tx.receptionVisit.findFirst({
+        where: { patientId: patient.id },
+        orderBy: [{ visitDate: 'desc' }, { createdAt: 'desc' }],
+      });
+      if (existingVisit) {
+        visit = await tx.receptionVisit.update({
+          where: { id: existingVisit.id },
+          data: {
+            visitType,
+            status,
+            visitDate,
+            department,
+            doctorName,
+            registrationFee,
+            paymentMode,
+            paymentStatus,
+            referBy,
+            sponsor,
+          },
+          include: {
+            patient: {
+              select: {
+                uhid: true,
+                name: true,
+                mobile: true,
+                dob: true,
+                age: true,
+                gender: true,
+                address: true,
+                abhaNumber: true,
+                abhaAddress: true,
+                abhaStatus: true,
+                phrAddress: true,
+                healthIdNumber: true,
+                isAbhaVerified: true,
+          mobileVerified: true,
+          aadhaarVerified: true,
+          abdmVerifiedAt: true,
+                registrationNumber: true,
+              },
             },
           },
-        },
-      });
+        });
+      } else {
+        visit = await tx.receptionVisit.create({
+          data: {
+            patientId: patient.id,
+            visitType,
+            status,
+            visitDate,
+            token,
+            queueNumber,
+            department,
+            doctorName,
+            registrationFee,
+            paymentMode,
+            paymentStatus,
+            referBy,
+            sponsor,
+          },
+          include: {
+            patient: {
+              select: {
+                uhid: true,
+                name: true,
+                mobile: true,
+                dob: true,
+                age: true,
+                gender: true,
+                address: true,
+                abhaNumber: true,
+                abhaAddress: true,
+                abhaStatus: true,
+                phrAddress: true,
+                healthIdNumber: true,
+                isAbhaVerified: true,
+          mobileVerified: true,
+          aadhaarVerified: true,
+          abdmVerifiedAt: true,
+                registrationNumber: true,
+              },
+            },
+          },
+        });
+      }
+    }
+
+    // Enable Patient Portal if requested
+    if (req.body.enablePortal) {
+      const portalPassword = req.body.portalPassword || '';
+      if (!portalPassword || portalPassword.length < 6) throw new Error('Portal password must be at least 6 characters');
+      const hashed = await bcrypt.hash(portalPassword, 12);
+      const existingAuth = await tx.patientAuth.findUnique({ where: { patientId: patient.id } });
+      if (!existingAuth) {
+        await tx.patientAuth.create({ data: { patientId: patient.id, password: hashed } });
+      }
     }
 
     return { patient, visit };
@@ -322,10 +518,17 @@ async function registerPatient(req, res) {
     { maxWait: 10_000, timeout: 25_000 },
   );
 
+  if (saved.visit?.department === 'Emergency & Trauma Care') {
+    const title = 'Emergency Patient Registered';
+    const msg = `Patient ${saved.patient?.name || 'Patient'} (${saved.patient?.uhid || ''}) registered under Emergency & Trauma Care department.`;
+    await triggerCriticalAlert(title, msg);
+  }
+
   return res.status(201).json({
     message: 'Patient registered',
     patient: saved.patient,
     visit: flattenVisitRow(saved.visit),
+    hipLink: null,
   });
 }
 
@@ -335,21 +538,32 @@ async function listPatients(req, res) {
   const gender = normalizeString(req.query.gender);
   const department = normalizeString(req.query.department);
   const date = normalizeString(req.query.date); // yyyy-mm-dd
-
+  const dateFrom = normalizeString(req.query.dateFrom);
+  const dateTo = normalizeString(req.query.dateTo);
+ 
   const forExport = String(req.query.export || '') === '1';
   const page = Math.max(1, parseOptionalInt(req.query.page) || 1);
   const pageSize = forExport
     ? Math.min(5000, Math.max(1, parseOptionalInt(req.query.pageSize) || 5000))
     : Math.min(50, Math.max(1, parseOptionalInt(req.query.pageSize) || 8));
   const skip = forExport ? 0 : (page - 1) * pageSize;
-
+ 
   const where = {};
   if (visitType && visitType.toLowerCase() !== 'all') where.visitType = mapVisitTypeToEnum(visitType);
   if (department && department.toLowerCase() !== 'all') where.department = department;
-
+ 
   if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const d = new Date(`${date}T00:00:00.000Z`);
     if (!Number.isNaN(d.getTime())) where.visitDate = { gte: toStartOfDay(d), lte: toEndOfDay(d) };
+  } else {
+    if (dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) {
+      const d0 = new Date(`${dateFrom}T00:00:00.000Z`);
+      if (!Number.isNaN(d0.getTime())) where.visitDate = { ...(where.visitDate || {}), gte: toStartOfDay(d0) };
+    }
+    if (dateTo && /^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+      const d1 = new Date(`${dateTo}T00:00:00.000Z`);
+      if (!Number.isNaN(d1.getTime())) where.visitDate = { ...(where.visitDate || {}), lte: toEndOfDay(d1) };
+    }
   }
 
   const patientWhere = {};
@@ -366,7 +580,7 @@ async function listPatients(req, res) {
 
   if (Object.keys(patientWhere).length) where.patient = patientWhere;
 
-  const [total, rows] = await Promise.all([
+  const [total, rows, selfPatients] = await Promise.all([
     prisma.receptionVisit.count({ where }),
     prisma.receptionVisit.findMany({
       where,
@@ -384,9 +598,57 @@ async function listPatients(req, res) {
             age: true,
             gender: true,
             address: true,
+            abhaNumber: true,
+            abhaAddress: true,
+            abhaStatus: true,
+            phrAddress: true,
+            healthIdNumber: true,
+            isAbhaVerified: true,
+          mobileVerified: true,
+          aadhaarVerified: true,
+          abdmVerifiedAt: true,
+          hipLinked: true,
+          careContextId: true,
+          careContextStatus: true,
+          linkedAt: true,
+          syncStatus: true,
+registrationSource: true,
+            patientAuth: { select: { id: true, lastLoginAt: true } },
           },
         },
       },
+    }),
+    prisma.patient.findMany({
+      where: { registrationSource: 'SELF' },
+      select: {
+        id: true,
+        uhid: true,
+        registrationNumber: true,
+        name: true,
+        mobile: true,
+        dob: true,
+        age: true,
+        gender: true,
+        address: true,
+        abhaNumber: true,
+        abhaAddress: true,
+        abhaStatus: true,
+        phrAddress: true,
+        healthIdNumber: true,
+        isAbhaVerified: true,
+          mobileVerified: true,
+          aadhaarVerified: true,
+          abdmVerifiedAt: true,
+          hipLinked: true,
+          careContextId: true,
+          careContextStatus: true,
+          linkedAt: true,
+          syncStatus: true,
+registrationSource: true,
+        createdAt: true,
+        patientAuth: { select: { id: true, lastLoginAt: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     }),
   ]);
 
@@ -399,11 +661,30 @@ async function listPatients(req, res) {
     prisma.receptionVisit.count({ where: { status: 'DISCHARGED' } }),
   ]);
 
+  const items = rows.map(flattenVisitRow);
+  // Deduplicate by UHID keeping the latest visit per patient
+  const seenUhids = new Set();
+  const deduped = [];
+  for (const item of items) {
+    if (item.uhid && seenUhids.has(item.uhid)) continue;
+    if (item.uhid) seenUhids.add(item.uhid);
+    deduped.push(item);
+  }
+  const selfItems = selfPatients.map(flattenPatientRow);
+  // Merge self-registered patients into the list, avoiding duplicates by uhid
+  const existingUhids = new Set(deduped.map((i) => i.uhid).filter(Boolean));
+  for (const s of selfItems) {
+    if (s.uhid && !existingUhids.has(s.uhid)) {
+      deduped.unshift(s);
+      existingUhids.add(s.uhid);
+    }
+  }
+
   return res.json({
     page,
     pageSize,
-    total,
-    items: rows.map(flattenVisitRow),
+    total: total + selfItems.length,
+    items: deduped,
     stats: {
       total,
       todayRegs,
@@ -415,26 +696,46 @@ async function listPatients(req, res) {
 
 async function searchPatients(req, res) {
   const q = normalizeString(req.query.q);
-  if (!q || q.length < 2) return res.json({ items: [] });
+  const where = {};
+  if (q && q.length >= 2) {
+    where.patient = {
+      OR: [
+        { name: { contains: q, mode: 'insensitive' } },
+        { uhid: { contains: q, mode: 'insensitive' } },
+        { mobile: { contains: q } },
+      ],
+    };
+  }
 
   const visits = await prisma.receptionVisit.findMany({
-    where: {
-      patient: {
-        OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          { uhid: { contains: q, mode: 'insensitive' } },
-          { mobile: { contains: q } },
-        ],
-      },
-    },
+    where,
     orderBy: [{ visitDate: 'desc' }, { createdAt: 'desc' }],
-    take: 15,
+    take: 30,
     include: {
-      patient: { select: { uhid: true, registrationNumber: true, name: true, mobile: true, dob: true, age: true, gender: true, address: true } },
+      patient: {
+        select: {
+          uhid: true,
+          registrationNumber: true,
+          name: true,
+          mobile: true,
+          dob: true,
+          age: true,
+          gender: true,
+          address: true,
+          abhaNumber: true,
+          abhaAddress: true,
+          abhaStatus: true,
+          phrAddress: true,
+          healthIdNumber: true,
+          isAbhaVerified: true,
+          mobileVerified: true,
+          aadhaarVerified: true,
+          abdmVerifiedAt: true,
+        },
+      },
     },
   });
 
-  // de-dupe by UHID
   const seen = new Set();
   const uniq = [];
   for (const v of visits) {
@@ -443,160 +744,172 @@ async function searchPatients(req, res) {
     if (seen.has(uhid)) continue;
     seen.add(uhid);
     uniq.push(flattenVisitRow(v));
-    if (uniq.length >= 7) break;
+    if (uniq.length >= 10) break;
   }
 
   return res.json({ items: uniq });
 }
 
 async function getPatientDetails(req, res) {
-  const uhid = normalizeString(req.params.uhid);
-  if (!uhid) return res.status(400).json({ message: 'UHID is required' });
+  try {
+    const uhid = normalizeString(req.params.uhid);
+    if (!uhid) return res.status(400).json({ message: 'UHID is required' });
 
-  const patient = await prisma.patient.findUnique({
-    where: { uhid },
-    select: {
-      id: true,
-      uhid: true,
-      registrationNumber: true,
-      name: true,
-      mobile: true,
-      dob: true,
-      age: true,
-      gender: true,
-      address: true,
-      aadhaarId: true,
-      bloodGroup: true,
-      allergies: true,
-      heightCm: true,
-      weightKg: true,
-      emergencyName: true,
-      emergencyPhone: true,
-      emergencyRelation: true,
-      createdAt: true,
-    },
-  });
-  if (!patient) return res.status(404).json({ message: 'Patient not found' });
+    const patient = await prisma.patient.findUnique({
+      where: { uhid },
+      select: {
+        id: true, uhid: true, registrationNumber: true, name: true, mobile: true,
+        dob: true, age: true, gender: true, address: true, aadhaarId: true,
+        abhaNumber: true, abhaAddress: true, abhaStatus: true, phrAddress: true, healthIdNumber: true,
+        isAbhaVerified: true, mobileVerified: true, aadhaarVerified: true, abdmVerifiedAt: true,
+        hipLinked: true, careContextId: true, careContextStatus: true, linkedAt: true, syncStatus: true,
+        hipLinkRequestId: true, hipReferenceNumber: true,
+        bloodGroup: true, allergies: true, heightCm: true, weightKg: true,
+        emergencyName: true, emergencyPhone: true, emergencyRelation: true, createdAt: true,
+      },
+    });
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-  const visits = await prisma.receptionVisit.findMany({
-    where: { patientId: patient.id },
-    orderBy: [{ visitDate: 'desc' }, { createdAt: 'desc' }],
-    take: 30,
-  });
+    const [visits, activeAdmission, latestConsultation, latestAppt, appts] = await Promise.all([
+      prisma.receptionVisit.findMany({
+        where: { patientId: patient.id },
+        orderBy: [{ visitDate: 'desc' }, { createdAt: 'desc' }],
+        take: 30,
+      }),
+      prisma.admission.findFirst({
+        where: { patientId: patient.id, dischargeDate: null, status: { in: OPEN_ADMISSION_STATUSES } },
+        orderBy: [{ admissionDate: 'desc' }, { createdAt: 'desc' }],
+        select: { id: true, ipdNumber: true, admissionDate: true, status: true, department: true, admissionType: true, bedNumber: true, bedId: true, wardId: true },
+      }),
+      prisma.consultation.findFirst({
+        where: { patientId: patient.id },
+        orderBy: [{ createdAt: 'desc' }],
+        select: { disposition: true, referredDepartment: true, referredDoctorId: true },
+      }),
+      prisma.appointment.findFirst({
+        where: { patientId: patient.id },
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        select: { token: true, opdNumber: true, date: true, createdAt: true },
+      }),
+      prisma.appointment.findMany({
+        where: { patientId: patient.id },
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        take: 50,
+        select: { fee: true, paymentStatus: true, date: true, createdAt: true },
+      }),
+    ]);
 
-  const latest = visits[0] || null;
+    // Resolve bed/ward names separately to avoid relation FK errors
+    let wardName = '';
+    let bedCode = '';
+    if (activeAdmission) {
+      if (activeAdmission.wardId) {
+        try {
+          const w = await prisma.ward.findUnique({ where: { id: activeAdmission.wardId }, select: { name: true } });
+          wardName = w?.name || '';
+        } catch { /* ignore */ }
+      }
+      if (activeAdmission.bedId) {
+        try {
+          const b = await prisma.bed.findUnique({ where: { id: activeAdmission.bedId }, select: { code: true } });
+          bedCode = b?.code || '';
+        } catch { /* ignore */ }
+      }
+    }
 
-  // Token should appear only after appointment is booked.
-  // So, read token from Appointment (source of truth), not from ReceptionVisit.
-  const latestAppt = await prisma.appointment.findFirst({
-    where: { patientId: patient.id },
-    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-    select: { token: true, opdNumber: true, date: true, createdAt: true },
-  });
+    // Resolve referred doctor name separately
+    let referredDoctorName = '';
+    if (latestConsultation?.referredDoctorId) {
+      try {
+        const doc = await prisma.doctor.findUnique({
+          where: { id: latestConsultation.referredDoctorId },
+          select: { user: { select: { name: true } } },
+        });
+        referredDoctorName = doc?.user?.name || '';
+      } catch { /* ignore */ }
+    }
 
-  // Billing summary should come from booked appointments (not from registration fee)
-  const appts = await prisma.appointment.findMany({
-    where: { patientId: patient.id },
-    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-    take: 50,
-    select: { fee: true, paymentStatus: true, date: true, createdAt: true },
-  });
-
-  const normalizePay = (v) => String(v || '').trim().toUpperCase();
-  const hasAnyAppointment = Array.isArray(appts) && appts.length > 0;
-  const sponsorLatest = latest?.sponsor || '';
-  const billing = hasAnyAppointment
-      ? (() => {
-          let total = 0;
-          let paid = 0;
-          let pending = 0;
-          let lastPaymentDate = null;
-
-          for (const a of appts) {
-            const fee = typeof a.fee === 'number' ? a.fee : 0;
-            if (fee <= 0) continue;
-            total += fee;
-            const ps = normalizePay(a.paymentStatus);
-            if (ps === 'PAID') {
-              paid += fee;
-              if (!lastPaymentDate) lastPaymentDate = a.date || a.createdAt || null;
-            } else if (ps === 'PENDING') {
-              pending += fee;
+    const latest = visits[0] || null;
+    const normalizePay = (v) => String(v || '').trim().toUpperCase();
+    const hasAnyAppointment = Array.isArray(appts) && appts.length > 0;
+    const sponsorLatest = latest?.sponsor || '';
+    const billing = hasAnyAppointment
+        ? (() => {
+            let total = 0, paid = 0, pending = 0, lastPaymentDate = null;
+            for (const a of appts) {
+              const fee = typeof a.fee === 'number' ? a.fee : 0;
+              if (fee <= 0) continue;
+              total += fee;
+              const ps = normalizePay(a.paymentStatus);
+              if (ps === 'PAID') { paid += fee; if (!lastPaymentDate) lastPaymentDate = a.date || a.createdAt || null; }
+              else if (ps === 'PENDING') { pending += fee; }
             }
-          }
+            return { total, paid, pending, lastPaymentDate };
+          })()
+        : null;
 
-          return { total, paid, pending, lastPaymentDate };
-        })()
-      : null;
+    const genderLabel = patient.gender === 'MALE' ? 'Male' : patient.gender === 'FEMALE' ? 'Female' : patient.gender === 'OTHER' ? 'Other' : null;
 
-  const g = String(patient.gender || '');
-  const genderLabel = g === 'MALE' ? 'Male' : g === 'FEMALE' ? 'Female' : g === 'OTHER' ? 'Other' : null;
-
-  return res.json({
-    id: patient.id,
-    latestVisitId: latest?.id || null,
-    uhid: patient.uhid,
-    registrationNumber: patient.registrationNumber || '',
-    name: patient.name,
-    phone: patient.mobile,
-    dob: patient.dob,
-    age: patient.age ?? calculateAgeFromDob(patient.dob),
-    gender: genderLabel,
-    status: latest ? visitEnumToLabel(latest.status) : 'Waiting',
-    visitType: latest?.visitType || 'OPD',
-    doctor: latest?.doctorName || '',
-    token: latest?.token || '', // legacy compatibility; UI should prefer appointmentToken
-    appointmentToken: latestAppt?.token || '',
-    opdNumber: latestAppt?.opdNumber || '',
-    appointmentDate: latestAppt?.date || latestAppt?.createdAt || null,
-    department: latest?.department || '',
-    address: patient.address || '',
-    aadhaarId: patient.aadhaarId || '',
-    bloodGroup: patient.bloodGroup || '',
-    allergies: patient.allergies || '',
-    heightCm: patient.heightCm ?? null,
-    weightKg: patient.weightKg ?? null,
-    emergencyName: patient.emergencyName || '',
-    emergencyPhone: patient.emergencyPhone || '',
-    emergencyRelation: patient.emergencyRelation || '',
-    referBy: latest?.referBy || '',
-    sponsor: sponsorLatest,
-    isAyushman: isAyushmanSponsor(sponsorLatest),
-    admission:
-      latest?.visitType === 'IPD' || latest?.status === 'ADMITTED'
-        ? {
-            ward: 'General Ward',
-            bed: 'G-04',
-            date: latest?.visitDate || patient.createdAt,
-            room: 'G-1',
-            transferHistory: [],
-          }
-        : null,
-    billing,
-    consultation: {
-      status: latest?.status === 'COMPLETED' ? 'Completed' : 'Pending',
-      lastDate: latest?.visitDate || patient.createdAt,
-      visitStatus: latest ? visitEnumToLabel(latest.status) : 'Waiting',
-    },
-    history: visits
-      .slice()
-      .reverse()
-      .map((v) => ({
-        date: v.visitDate,
-        doctor: v.doctorName || '',
-        department: v.department || '',
-        visitType: v.visitType,
-        status: visitEnumToLabel(v.status),
-        token: v.token || '',
-      }))
-      .reverse(),
-    alerts: [
-      ...((billing?.pending || 0) > 0 ? [{ type: 'payment', text: 'Pending payment due' }] : []),
-      ...(latest?.visitType === 'OPD' && visitEnumToLabel(latest?.status) === 'Waiting'
-        ? [{ type: 'consult', text: `Waiting for Dr. ${latest?.doctorName || '—'}` }]
-        : []),
-    ],
-  });
+    return res.json({
+      id: patient.id,
+      latestVisitId: latest?.id || null,
+      uhid: patient.uhid,
+      registrationNumber: patient.registrationNumber || '',
+      name: patient.name,
+      phone: patient.mobile,
+      dob: patient.dob,
+      age: patient.age ?? calculateAgeFromDob(patient.dob),
+      gender: genderLabel,
+      registrationFee: latest?.registrationFee ?? null,
+      paymentMode: latest?.paymentMode || '',
+      paymentStatus: latest?.paymentStatus || '',
+      status: latest ? visitEnumToLabel(latest.status) : 'Waiting',
+      visitType: latest?.visitType || 'OPD',
+      doctor: latest?.doctorName || '',
+      token: latest?.token || '',
+      appointmentToken: latestAppt?.token || '',
+      opdNumber: latestAppt?.opdNumber || '',
+      appointmentDate: latestAppt?.date || latestAppt?.createdAt || null,
+      department: latest?.department || '',
+      address: patient.address || '',
+      aadhaarId: patient.aadhaarId || '',
+      abhaNumber: patient.abhaNumber || patient.healthIdNumber || '',
+      abhaAddress: patient.abhaAddress || '',
+      abhaStatus: patient.abhaStatus || '',
+      phrAddress: Array.isArray(patient.phrAddress) ? patient.phrAddress : [],
+      healthIdNumber: patient.healthIdNumber || patient.abhaNumber || '',
+      isAbhaVerified: Boolean(patient.isAbhaVerified),
+      mobileVerified: Boolean(patient.mobileVerified),
+      aadhaarVerified: Boolean(patient.aadhaarVerified),
+      abdmVerifiedAt: patient.abdmVerifiedAt || null,
+      hipLinked: Boolean(patient.hipLinked),
+      careContextId: patient.careContextId || '',
+      careContextStatus: patient.careContextStatus || '',
+      linkedAt: patient.linkedAt || null,
+      syncStatus: patient.syncStatus || '',
+      bloodGroup: patient.bloodGroup || '',
+      allergies: patient.allergies || '',
+      heightCm: patient.heightCm ?? null,
+      weightKg: patient.weightKg ?? null,
+      emergencyName: patient.emergencyName || '',
+      emergencyPhone: patient.emergencyPhone || '',
+      emergencyRelation: patient.emergencyRelation || '',
+      referBy: latest?.referBy || '',
+      sponsor: sponsorLatest,
+      isAyushman: isAyushmanSponsor(sponsorLatest),
+      hasActiveIpdAdmission: Boolean(activeAdmission),
+      activeAdmission: activeAdmission ? { id: activeAdmission.id, ipdNumber: activeAdmission.ipdNumber || '', admissionDate: activeAdmission.admissionDate, status: activeAdmission.status, department: activeAdmission.department || '', admissionType: activeAdmission.admissionType || '', ward: wardName, bed: bedCode || activeAdmission.bedNumber || '' } : null,
+      admission: activeAdmission ? { ward: wardName || activeAdmission.admissionType || 'General Ward', bed: bedCode || activeAdmission.bedNumber || '', date: activeAdmission.admissionDate, ipdNumber: activeAdmission.ipdNumber || '', transferHistory: [] } : null,
+      billing,
+      consultation: { status: latest?.status === 'COMPLETED' ? 'Completed' : 'Pending', lastDate: latest?.visitDate || patient.createdAt, visitStatus: latest ? visitEnumToLabel(latest.status) : 'Waiting', disposition: latestConsultation?.disposition || null, referredDepartment: latestConsultation?.referredDepartment || null, referredDoctorId: latestConsultation?.referredDoctorId || null, referredDoctorName },
+      history: visits.slice().reverse().map((v) => ({ date: v.visitDate, doctor: v.doctorName || '', department: v.department || '', visitType: v.visitType, status: visitEnumToLabel(v.status), token: v.token || '' })).reverse(),
+      alerts: [...((billing?.pending || 0) > 0 ? [{ type: 'payment', text: 'Pending payment due' }] : []), ...(latest?.visitType === 'OPD' && visitEnumToLabel(latest?.status) === 'Waiting' ? [{ type: 'consult', text: `Waiting for Dr. ${latest?.doctorName || '—'}` }] : [])],
+    });
+  } catch (err) {
+    console.error('[getPatientDetails] Error:', err?.message || err);
+    console.error('[getPatientDetails] Stack:', err?.stack || '(no stack)');
+    return res.status(500).json({ message: err?.message || 'Failed to load patient details' });
+  }
 }
 
 async function admitPatient(req, res) {

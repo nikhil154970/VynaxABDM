@@ -13,7 +13,7 @@ export default function Profile() {
   const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({
     name: user?.name || 'Default Receptionist',
-    email: user?.email || 'receptionist@ht-hospital.local',
+    email: user?.email || 'receptionist@vyanx.local',
     phone: '9876543210',
     empId: 'EMP-REC-001',
     dept: 'Reception',
@@ -50,7 +50,7 @@ export default function Profile() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center gap-5 mb-6">
             <div className="w-20 h-20 rounded-2xl flex items-center justify-center shrink-0"
-              style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}>
+              style={{ background: '#0077B6' }}>
               <MdPerson className="w-10 h-10 text-white" />
             </div>
             <div>
@@ -93,7 +93,7 @@ export default function Profile() {
           {editing && (
             <button onClick={handleSave}
               className="mt-5 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white shadow hover:shadow-md transition hover:-translate-y-0.5"
-              style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}>
+              style={{ background: '#0077B6' }}>
               <MdSave className="w-4 h-4" /> Save Changes
             </button>
           )}
@@ -143,7 +143,7 @@ export default function Profile() {
             disabled={!pwForm.current || !pwForm.newPw || pwForm.newPw !== pwForm.confirm}
             onClick={() => { setPwDone(true); setPwForm({ current: '', newPw: '', confirm: '' }); setTimeout(() => setPwDone(false), 3000); }}
             className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 transition"
-            style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}>
+            style={{ background: '#0077B6' }}>
             Update Password
           </button>
         </div>
@@ -151,3 +151,4 @@ export default function Profile() {
     </div>
   );
 }
+

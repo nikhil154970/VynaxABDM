@@ -1,0 +1,1338 @@
+{
+	"info": {
+		"_postman_id": "abdm-v3-complete",
+		"name": "ABDM V3 — Complete API Collection",
+		"description": "Comprehensive Postman collection covering ALL ABDM V3 API endpoints across M1 (ABHA), M2 (HIP), and M3 (HIU) milestones.\n\nIncludes authentication, discovery, linking, consent, data flow, profile share, and bridge management.\n\nSandbox: https://dev.abdm.gov.in | ABHA: https://abhasbx.abdm.gov.in/abha/api\nProduction: https://apis.abdm.gov.in | ABHA: https://abha.abdm.gov.in/api/abha\n\nMaintained by Nirmitee.io — https://nirmitee.io\nLast updated: March 2026",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Get Access Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has accessToken', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('accessToken');",
+									"    pm.expect(jsonData.accessToken).to.be.a('string').and.not.empty;",
+									"    ",
+									"    // Save token to environment",
+									"    pm.environment.set('accessToken', jsonData.accessToken);",
+									"    ",
+									"    // Save expiry timestamp",
+									"    var expiresIn = jsonData.expiresIn || 1800;",
+									"    pm.environment.set('tokenExpiry', String(Date.now() + (expiresIn * 1000)));",
+									"    ",
+									"    console.log('Access token saved. Expires in', expiresIn, 'seconds.');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"clientSecret\": \"{{clientSecret}}\",\n  \"grantType\": \"client_credentials\"\n}"
+						},
+						"url": {
+							"raw": "{{gatewayBaseUrl}}/gateway/v3/sessions",
+							"host": ["{{gatewayBaseUrl}}"],
+							"path": ["gateway", "v3", "sessions"]
+						},
+						"description": "Obtain an access token using your ABDM client credentials. The token is automatically saved to the `accessToken` environment variable.\n\n**Status:** Working\n\n**Token validity:** ~30 minutes (1800 seconds)\n\n**Note:** The collection's pre-request script auto-refreshes the token before it expires. You only need to run this manually for initial setup or debugging."
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints. Get your access token before calling any other API."
+		},
+		{
+			"name": "M1 — ABHA Creation & Verification",
+			"item": [
+				{
+					"name": "Enrollment",
+					"item": [
+						{
+							"name": "Request OTP for Enrollment",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "REQUEST-ID",
+										"value": "{{$guid}}"
+									},
+									{
+										"key": "TIMESTAMP",
+										"value": "{{$isoTimestamp}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"scope\": [\"abha-enrol\", \"mobile-verify\"],\n  \"loginHint\": \"aadhaar\",\n  \"loginId\": \"AADHAAR_NUMBER_HERE\",\n  \"otpSystem\": \"aadhaar\"\n}"
+								},
+								"url": {
+									"raw": "{{abhaBaseUrl}}/v3/enrollment/request/otp",
+									"host": ["{{abhaBaseUrl}}"],
+									"path": ["v3", "enrollment", "request", "otp"]
+								},
+								"description": "Request an OTP for ABHA enrollment. The OTP is sent to the mobile number linked with the Aadhaar number.\n\n**Status:** Working\n\n**Flow:**\n1. Call this endpoint with Aadhaar number\n2. User receives OTP on Aadhaar-linked mobile\n3. Use the transactionId from response in subsequent enrollment calls"
+							},
+							"response": []
+						},
+						{
+							"name": "Enroll by Aadhaar",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "REQUEST-ID",
+										"value": "{{$guid}}"
+									},
+									{
+										"key": "TIMESTAMP",
+										"value": "{{$isoTimestamp}}"
+									},
+									{
+										"key": "T-TOKEN",
+										"value": "{{transactionId}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"authData\": {\n    \"authMethods\": [\"otp\"],\n    \"otp\": {\n      \"txnId\": \"{{transactionId}}\",\n      \"otpValue\": \"OTP_VALUE_HERE\"\n    }\n  },\n  \"consent\": {\n    \"code\": \"abha-enrollment\",\n    \"version\": \"1.4\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{abhaBaseUrl}}/v3/enrollment/enrol/byAadhaar",
+									"host": ["{{abhaBaseUrl}}"],
+									"path": ["v3", "enrollment", "enrol", "byAadhaar"]
+								},
+								"description": "Complete ABHA enrollment using Aadhaar OTP verification.\n\n**Status:** Working\n\n**Prerequisites:** Must first call 'Request OTP for Enrollment' and have a valid transactionId."
+							},
+							"response": []
+						},
+						{
+							"name": "Enroll by ABDM",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "REQUEST-ID",
+										"value": "{{$guid}}"
+									},
+									{
+										"key": "TIMESTAMP",
+										"value": "{{$isoTimestamp}}"
+									},
+									{
+										"key": "T-TOKEN",
+										"value": "{{transactionId}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"authData\": {\n    \"authMethods\": [\"otp\"],\n    \"otp\": {\n      \"txnId\": \"{{transactionId}}\",\n      \"otpValue\": \"OTP_VALUE_HERE\"\n    }\n  },\n  \"consent\": {\n    \"code\": \"abha-enrollment\",\n    \"version\": \"1.4\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{abhaBaseUrl}}/v3/enrollment/enrol/byAbdm",
+									"host": ["{{abhaBaseUrl}}"],
+									"path": ["v3", "enrollment", "enrol", "byAbdm"]
+								},
+								"description": "Enroll for ABHA via ABDM (alternate enrollment method).\n\n**Status:** Working"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Profile",
+					"item": [
+						{
+							"name": "Login — Request OTP",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "REQUEST-ID",
+										"value": "{{$guid}}"
+									},
+									{
+										"key": "TIMESTAMP",
+										"value": "{{$isoTimestamp}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"scope\": [\"abha-login\", \"mobile-verify\"],\n  \"loginHint\": \"abha-number\",\n  \"loginId\": \"{{abhaNumber}}\",\n  \"otpSystem\": \"abdm\"\n}"
+								},
+								"url": {
+									"raw": "{{abhaBaseUrl}}/v3/profile/login/request/otp",
+									"host": ["{{abhaBaseUrl}}"],
+									"path": ["v3", "profile", "login", "request", "otp"]
+								},
+								"description": "Request an OTP for logging into an existing ABHA account.\n\n**Status:** Working\n\n**loginHint values:** abha-number, abha-address, mobile\n**otpSystem options:** abdm, aadhaar"
+							},
+							"response": []
+						},
+						{
+							"name": "Login — Verify OTP",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "REQUEST-ID",
+										"value": "{{$guid}}"
+									},
+									{
+										"key": "TIMESTAMP",
+										"value": "{{$isoTimestamp}}"
+									},
+									{
+										"key": "T-TOKEN",
+										"value": "{{transactionId}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"authData\": {\n    \"authMethods\": [\"otp\"],\n    \"otp\": {\n      \"txnId\": \"{{transactionId}}\",\n      \"otpValue\": \"OTP_VALUE_HERE\"\n    }\n  }\n}"
+								},
+								"url": {
+									"raw": "{{abhaBaseUrl}}/v3/profile/login/verify",
+									"host": ["{{abhaBaseUrl}}"],
+									"path": ["v3", "profile", "login", "verify"]
+								},
+								"description": "Verify the OTP to complete ABHA login and get a profile token.\n\n**Status:** Working"
+							},
+							"response": []
+						},
+						{
+							"name": "Get ABHA Card",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "REQUEST-ID",
+										"value": "{{$guid}}"
+									},
+									{
+										"key": "TIMESTAMP",
+										"value": "{{$isoTimestamp}}"
+									},
+									{
+										"key": "X-TOKEN",
+										"value": "Bearer {{transactionId}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"abhaNumber\": \"{{abhaNumber}}\",\n  \"type\": \"png\"\n}"
+								},
+								"url": {
+									"raw": "{{abhaBaseUrl}}/v3/profile/account/getAbhaCard",
+									"host": ["{{abhaBaseUrl}}"],
+									"path": ["v3", "profile", "account", "getAbhaCard"]
+								},
+								"description": "Download the ABHA card as a PNG or PDF.\n\n**Status:** Working\n\n**type options:** png, pdf"
+							},
+							"response": []
+						}
+					]
+				}
+			],
+			"description": "M1 milestone: ABHA number creation, enrollment (Aadhaar/ABDM), profile login, and ABHA card download.\n\nBase URL: {{abhaBaseUrl}}"
+		},
+		{
+			"name": "M2 — HIP Services",
+			"item": [
+				{
+					"name": "Discovery & Linking",
+					"item": [
+						{
+							"name": "Gateway→HIP: Patient Discovery",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"patient\": {\n    \"id\": \"{{abhaAddress}}\",\n    \"name\": \"John Doe\",\n    \"gender\": \"M\",\n    \"yearOfBirth\": 1990,\n    \"verifiedIdentifiers\": [\n      {\n        \"type\": \"MOBILE\",\n        \"value\": \"+91-9999999999\"\n      }\n    ],\n    \"unverifiedIdentifiers\": [\n      {\n        \"type\": \"MR\",\n        \"value\": \"PAT-001\"\n      }\n    ]\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/hip/patient/care-context/discover",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "hip", "patient", "care-context", "discover"]
+								},
+								"description": "**Direction:** Gateway → HIP (callback)\n**Status:** Working\n\nPayload format that ABDM sends to your HIP for patient discovery. V3 is SYNCHRONOUS — respond with care contexts in the HTTP response body."
+							},
+							"response": []
+						},
+						{
+							"name": "HIP→Gateway: On-Discover Response",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"transactionId\": \"{{transactionId}}\",\n  \"patient\": {\n    \"referenceNumber\": \"{{patientReferenceNumber}}\",\n    \"display\": \"John Doe\",\n    \"careContexts\": [\n      {\n        \"referenceNumber\": \"CC-001\",\n        \"display\": \"OPD Visit — 15 Mar 2026\"\n      },\n      {\n        \"referenceNumber\": \"CC-002\",\n        \"display\": \"Lab Report — 10 Mar 2026\"\n      }\n    ],\n    \"matchedBy\": [\"MOBILE\"]\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/user-initiated-linking/v3/patient/care-context/on-discover",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["user-initiated-linking", "v3", "patient", "care-context", "on-discover"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** Working\n\nSend discovery response with matched patient and care contexts."
+							},
+							"response": []
+						},
+						{
+							"name": "Gateway→HIP: Link Init",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"transactionId\": \"{{transactionId}}\",\n  \"patient\": {\n    \"id\": \"{{abhaAddress}}\",\n    \"referenceNumber\": \"{{patientReferenceNumber}}\",\n    \"careContexts\": [\n      {\n        \"referenceNumber\": \"CC-001\"\n      }\n    ]\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/hip/link/care-context/init",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "hip", "link", "care-context", "init"]
+								},
+								"description": "**Direction:** Gateway → HIP (callback)\n**Status:** Working\n\nGateway initiates linking of selected care contexts. Your HIP should generate an OTP and respond via on-init."
+							},
+							"response": []
+						},
+						{
+							"name": "HIP→Gateway: On-Init Response",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"transactionId\": \"{{transactionId}}\",\n  \"link\": {\n    \"referenceNumber\": \"LINK-REF-001\",\n    \"authenticationType\": \"DIRECT\",\n    \"meta\": {\n      \"communicationMedium\": \"MOBILE\",\n      \"communicationHint\": \"9****9999\",\n      \"communicationExpiry\": \"2026-03-18T12:00:00.000Z\"\n    }\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/user-initiated-linking/v3/link/care-context/on-init",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["user-initiated-linking", "v3", "link", "care-context", "on-init"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** Working\n\nRespond to link init with a link reference and auth details."
+							},
+							"response": []
+						},
+						{
+							"name": "Gateway→HIP: Link Confirm",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"confirmation\": {\n    \"linkRefNumber\": \"LINK-REF-001\",\n    \"token\": \"OTP_OR_TOKEN_HERE\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/hip/link/care-context/confirm",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "hip", "link", "care-context", "confirm"]
+								},
+								"description": "**Direction:** Gateway → HIP (callback)\n**Status:** Working\n\nGateway sends patient's OTP to confirm linking."
+							},
+							"response": []
+						},
+						{
+							"name": "HIP→Gateway: On-Confirm Response",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"patient\": {\n    \"referenceNumber\": \"{{patientReferenceNumber}}\",\n    \"display\": \"John Doe\",\n    \"careContexts\": [\n      {\n        \"referenceNumber\": \"CC-001\",\n        \"display\": \"OPD Visit — 15 Mar 2026\"\n      }\n    ]\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/user-initiated-linking/v3/link/care-context/on-confirm",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["user-initiated-linking", "v3", "link", "care-context", "on-confirm"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** Working\n\nConfirm that care contexts have been successfully linked."
+							},
+							"response": []
+						}
+					],
+					"description": "User-initiated discovery and linking flow between patient PHR app, ABDM gateway, and your HIP."
+				},
+				{
+					"name": "HIP-Initiated Linking",
+					"item": [
+						{
+							"name": "Generate Link Token",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"patientId\": \"{{abhaAddress}}\"\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/v3/token/generate-token",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["v3", "token", "generate-token"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** KNOWN 403 — WSO2 subscription issue in sandbox\n\nGenerate a link token for HIP-initiated linking."
+							},
+							"response": []
+						},
+						{
+							"name": "Add Care Contexts (HIP-Initiated)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"link\": {\n    \"accessToken\": \"{{linkToken}}\",\n    \"patient\": {\n      \"referenceNumber\": \"{{patientReferenceNumber}}\",\n      \"display\": \"John Doe\",\n      \"careContexts\": [\n        {\n          \"referenceNumber\": \"CC-003\",\n          \"display\": \"Prescription — 18 Mar 2026\"\n        }\n      ]\n    }\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/hip/v3/link/carecontext",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["hip", "v3", "link", "carecontext"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** KNOWN 403 — WSO2 subscription issue in sandbox\n\nAdd new care contexts to an already-linked patient."
+							},
+							"response": []
+						},
+						{
+							"name": "Link Context Notification",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"notification\": {\n    \"patientId\": \"{{abhaAddress}}\",\n    \"careContexts\": [\n      {\n        \"referenceNumber\": \"CC-003\",\n        \"display\": \"Prescription — 18 Mar 2026\",\n        \"hiType\": \"Prescription\"\n      }\n    ],\n    \"hipId\": \"{{hipId}}\",\n    \"date\": \"2026-03-18T10:00:00.000Z\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/hip/v3/link/context/notify",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["hip", "v3", "link", "context", "notify"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** KNOWN 403 — WSO2 subscription issue in sandbox\n\nNotify ABDM about newly linked care contexts."
+							},
+							"response": []
+						},
+						{
+							"name": "SMS Deep Link Notification",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"notification\": {\n    \"phoneNo\": \"+91-9999999999\",\n    \"hip\": {\n      \"name\": \"Test Hospital\",\n      \"id\": \"{{hipId}}\"\n    }\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/hip/v3/link/patient/links/sms/notify2",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["hip", "v3", "link", "patient", "links", "sms", "notify2"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** KNOWN 403 — WSO2 subscription issue in sandbox\n\nSend an SMS deep link to prompt patient to discover and link records."
+							},
+							"response": []
+						}
+					],
+					"description": "HIP-initiated linking endpoints. NOTE: All return 403 in sandbox (March 2026)."
+				},
+				{
+					"name": "Consent (HIP Side)",
+					"item": [
+						{
+							"name": "Gateway→HIP: Consent Notification",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"notification\": {\n    \"consentRequestId\": \"{{consentId}}\",\n    \"status\": \"GRANTED\",\n    \"consentArtefacts\": [\n      {\n        \"id\": \"{{consentArtefactId}}\"\n      }\n    ]\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/consent/request/hip/notify",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "consent", "request", "hip", "notify"]
+								},
+								"description": "**Direction:** Gateway → HIP (callback)\n**Status:** Working\n\nGateway notifies your HIP when consent status changes (GRANTED, DENIED, REVOKED, EXPIRED)."
+							},
+							"response": []
+						},
+						{
+							"name": "HIP→Gateway: Consent On-Notify",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"acknowledgement\": {\n    \"status\": \"OK\",\n    \"consentId\": \"{{consentId}}\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/consent/v3/request/hip/on-notify",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["consent", "v3", "request", "hip", "on-notify"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** Working\n\nAcknowledge receipt of the consent notification."
+							},
+							"response": []
+						}
+					],
+					"description": "Consent handling from the HIP perspective."
+				},
+				{
+					"name": "Data Flow (HIP Side)",
+					"item": [
+						{
+							"name": "Gateway→HIP: Health Information Request",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"transactionId\": \"{{transactionId}}\",\n  \"hiRequest\": {\n    \"consent\": {\n      \"id\": \"{{consentArtefactId}}\"\n    },\n    \"dateRange\": {\n      \"from\": \"2025-01-01T00:00:00.000Z\",\n      \"to\": \"2026-03-18T23:59:59.000Z\"\n    },\n    \"dataPushUrl\": \"https://dev.abdm.gov.in/data-transfer\",\n    \"keyMaterial\": {\n      \"cryptoAlg\": \"ECDH\",\n      \"curve\": \"Curve25519\",\n      \"dhPublicKey\": {\n        \"expiry\": \"2026-03-19T10:00:00.000Z\",\n        \"parameters\": \"Curve25519/32byte random key\",\n        \"keyValue\": \"PUBLIC_KEY_VALUE_HERE\"\n      },\n      \"nonce\": \"RANDOM_NONCE_HERE\"\n    }\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/hip/health-information/request",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "hip", "health-information", "request"]
+								},
+								"description": "**Direction:** Gateway → HIP (callback)\n**Status:** KNOWN 403 — WSO2 subscription issue in sandbox\n\nGateway requests health data from your HIP. Encrypt data using ECDH Curve25519 and push to dataPushUrl."
+							},
+							"response": []
+						},
+						{
+							"name": "HIP→Gateway: On-Request Acknowledgment",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"hiRequest\": {\n    \"transactionId\": \"{{transactionId}}\",\n    \"sessionStatus\": \"ACKNOWLEDGED\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/data-flow/v3/health-information/hip/on-request",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["data-flow", "v3", "health-information", "hip", "on-request"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** KNOWN 403 — WSO2 subscription issue in sandbox\n\nAcknowledge receipt of the health information request."
+							},
+							"response": []
+						},
+						{
+							"name": "HIP→Gateway: Data Transfer Notification",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"notification\": {\n    \"consentId\": \"{{consentArtefactId}}\",\n    \"transactionId\": \"{{transactionId}}\",\n    \"doneAt\": \"{{$isoTimestamp}}\",\n    \"notifier\": {\n      \"type\": \"HIP\",\n      \"id\": \"{{hipId}}\"\n    },\n    \"statusNotification\": {\n      \"sessionStatus\": \"TRANSFERRED\",\n      \"hipId\": \"{{hipId}}\",\n      \"statusResponses\": [\n        {\n          \"careContextReference\": \"CC-001\",\n          \"hiStatus\": \"OK\",\n          \"description\": \"Data transferred successfully\"\n        }\n      ]\n    }\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/data-flow/v3/health-information/notify",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["data-flow", "v3", "health-information", "notify"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** KNOWN 403 — WSO2 subscription issue in sandbox\n\nNotify ABDM that health data has been transferred to the dataPushUrl."
+							},
+							"response": []
+						}
+					],
+					"description": "Data flow from the HIP perspective. NOTE: All return 403 in sandbox (March 2026)."
+				},
+				{
+					"name": "Profile Share",
+					"item": [
+						{
+							"name": "Gateway→HIP: Patient Profile Share",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"intent\": {\n    \"type\": \"REGISTRATION\"\n  },\n  \"location\": {\n    \"latitude\": \"19.0760\",\n    \"longitude\": \"72.8777\"\n  },\n  \"profile\": {\n    \"hipCode\": \"{{hipId}}\",\n    \"patient\": {\n      \"healthId\": \"{{abhaAddress}}\",\n      \"healthIdNumber\": \"{{abhaNumber}}\",\n      \"name\": \"John Doe\",\n      \"gender\": \"M\",\n      \"yearOfBirth\": \"1990\",\n      \"monthOfBirth\": \"06\",\n      \"dayOfBirth\": \"15\",\n      \"address\": {\n        \"line\": \"123 Main Street\",\n        \"district\": \"Mumbai\",\n        \"state\": \"Maharashtra\",\n        \"pincode\": \"400001\"\n      },\n      \"identifiers\": [\n        {\n          \"type\": \"MOBILE\",\n          \"value\": \"+91-9999999999\"\n        }\n      ]\n    }\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/hip/patient/share",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "hip", "patient", "share"]
+								},
+								"description": "**Direction:** Gateway → HIP (callback)\n**Status:** KNOWN 403 for on-share response\n\nGateway sends patient profile when patient scans QR code at your facility."
+							},
+							"response": []
+						},
+						{
+							"name": "HIP→Gateway: On-Share Acknowledgment",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"acknowledgement\": {\n    \"status\": \"SUCCESS\",\n    \"healthId\": \"{{abhaAddress}}\",\n    \"tokenNumber\": \"TOKEN-42\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/patient-share/v3/on-share",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["patient-share", "v3", "on-share"]
+								},
+								"description": "**Direction:** HIP → Gateway\n**Status:** KNOWN 403 — WSO2 subscription issue in sandbox\n\nAcknowledge receipt of patient profile share."
+							},
+							"response": []
+						}
+					],
+					"description": "QR-code based patient registration. NOTE: on-share returns 403 in sandbox (March 2026)."
+				},
+				{
+					"name": "Bridge Management",
+					"item": [
+						{
+							"name": "Update Bridge URL",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"url\": \"{{bridgeUrl}}\"\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/gateway/v3/bridge/url",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["gateway", "v3", "bridge", "url"]
+								},
+								"description": "**Direction:** HIP/HIU → Gateway\n**Status:** KNOWN 403 — Blocked by CloudFront WAF in sandbox\n\nUpdate your bridge callback URL. Workaround: use ABDM Sandbox Portal UI."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Bridge Services",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									}
+								],
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/gateway/v3/bridge/getServices",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["gateway", "v3", "bridge", "getServices"]
+								},
+								"description": "**Direction:** HIP/HIU → Gateway\n**Status:** Working\n\nRetrieve registered services for your bridge. Good for verifying setup."
+							},
+							"response": []
+						}
+					],
+					"description": "Bridge URL and service management."
+				}
+			],
+			"description": "M2 milestone: HIP services including discovery, linking, consent, data flow, profile share, and bridge management.\n\nBase URL: {{gatewayBaseUrl}}"
+		},
+		{
+			"name": "M3 — HIU Services",
+			"item": [
+				{
+					"name": "Consent Management",
+					"item": [
+						{
+							"name": "HIU→Gateway: Init Consent Request",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"consent\": {\n    \"purpose\": {\n      \"text\": \"Care Management\",\n      \"code\": \"CAREMGT\",\n      \"refUri\": \"https://nrces.in/ndhm/purposes/CAREMGT.html\"\n    },\n    \"patient\": {\n      \"id\": \"{{abhaAddress}}\"\n    },\n    \"hip\": {\n      \"id\": \"{{hipId}}\"\n    },\n    \"hiu\": {\n      \"id\": \"{{hiuId}}\"\n    },\n    \"requester\": {\n      \"name\": \"Dr. Priya Sharma\",\n      \"identifier\": {\n        \"type\": \"REGNO\",\n        \"value\": \"MH-12345\",\n        \"system\": \"https://www.mciindia.org\"\n      }\n    },\n    \"hiTypes\": [\n      \"OPConsultation\",\n      \"Prescription\",\n      \"DiagnosticReport\",\n      \"DischargeSummary\"\n    ],\n    \"permission\": {\n      \"accessMode\": \"VIEW\",\n      \"dateRange\": {\n        \"from\": \"2025-01-01T00:00:00.000Z\",\n        \"to\": \"2026-03-18T23:59:59.000Z\"\n      },\n      \"dataEraseAt\": \"2026-06-18T23:59:59.000Z\",\n      \"frequency\": {\n        \"unit\": \"HOUR\",\n        \"value\": 1,\n        \"repeats\": 0\n      }\n    }\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/consent/v3/request/init",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["consent", "v3", "request", "init"]
+								},
+								"description": "**Direction:** HIU → Gateway\n**Status:** Working\n\nInitiate a consent request to access patient health records.\n\n**purpose.code values:** CAREMGT, BTG, PUBHLTH, HPAYMT, DSRCH, PATRQT\n**hiTypes:** OPConsultation, Prescription, DiagnosticReport, DischargeSummary, ImmunizationRecord, HealthDocumentRecord, WellnessRecord"
+							},
+							"response": []
+						},
+						{
+							"name": "Gateway→HIU: Consent On-Init Callback",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"consentRequest\": {\n    \"id\": \"{{consentId}}\"\n  },\n  \"error\": null\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/hiu/consent/request/on-init",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "hiu", "consent", "request", "on-init"]
+								},
+								"description": "**Direction:** Gateway → HIU (callback)\n**Status:** Working\n\nGateway confirms consent request registration and returns consentRequest.id."
+							},
+							"response": []
+						},
+						{
+							"name": "HIU→Gateway: Check Consent Status",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"consentRequestId\": \"{{consentId}}\"\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/consent/v3/request/status",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["consent", "v3", "request", "status"]
+								},
+								"description": "**Direction:** HIU → Gateway\n**Status:** Working\n\nCheck the current status of a consent request."
+							},
+							"response": []
+						},
+						{
+							"name": "Gateway→HIU: Consent On-Status Callback",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"consentRequest\": {\n    \"id\": \"{{consentId}}\",\n    \"status\": \"GRANTED\",\n    \"consentArtefacts\": [\n      {\n        \"id\": \"{{consentArtefactId}}\"\n      }\n    ]\n  },\n  \"error\": null\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/hiu/consent/request/on-status",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "hiu", "consent", "request", "on-status"]
+								},
+								"description": "**Direction:** Gateway → HIU (callback)\n**Status:** Working\n\nGateway returns consent status and artefact IDs."
+							},
+							"response": []
+						},
+						{
+							"name": "HIU→Gateway: Fetch Consent Artefact",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"consentId\": \"{{consentArtefactId}}\"\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/consent/v3/fetch",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["consent", "v3", "fetch"]
+								},
+								"description": "**Direction:** HIU → Gateway\n**Status:** Working\n\nFetch full consent artefact details."
+							},
+							"response": []
+						},
+						{
+							"name": "Gateway→HIU: Consent On-Fetch Callback",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"consent\": {\n    \"status\": \"GRANTED\",\n    \"consentDetail\": {\n      \"schemaVersion\": \"v3\",\n      \"consentId\": \"{{consentArtefactId}}\",\n      \"createdAt\": \"2026-03-18T10:00:00.000Z\",\n      \"purpose\": {\n        \"text\": \"Care Management\",\n        \"code\": \"CAREMGT\"\n      },\n      \"patient\": {\n        \"id\": \"{{abhaAddress}}\"\n      },\n      \"hip\": {\n        \"id\": \"{{hipId}}\"\n      },\n      \"hiu\": {\n        \"id\": \"{{hiuId}}\"\n      },\n      \"consentManager\": {\n        \"id\": \"sbx\"\n      },\n      \"hiTypes\": [\"OPConsultation\", \"Prescription\"],\n      \"permission\": {\n        \"accessMode\": \"VIEW\",\n        \"dateRange\": {\n          \"from\": \"2025-01-01T00:00:00.000Z\",\n          \"to\": \"2026-03-18T23:59:59.000Z\"\n        },\n        \"dataEraseAt\": \"2026-06-18T23:59:59.000Z\"\n      },\n      \"careContexts\": [\n        {\n          \"patientReference\": \"{{patientReferenceNumber}}\",\n          \"careContextReference\": \"CC-001\"\n        }\n      ]\n    },\n    \"signature\": \"DIGITAL_SIGNATURE_HERE\"\n  },\n  \"error\": null\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/hiu/consent/on-fetch",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "hiu", "consent", "on-fetch"]
+								},
+								"description": "**Direction:** Gateway → HIU (callback)\n**Status:** Working\n\nGateway returns full consent artefact with digital signature."
+							},
+							"response": []
+						},
+						{
+							"name": "Gateway→HIU: Consent Notification",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"notification\": {\n    \"consentRequestId\": \"{{consentId}}\",\n    \"status\": \"GRANTED\",\n    \"consentArtefacts\": [\n      {\n        \"id\": \"{{consentArtefactId}}\"\n      }\n    ]\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/api/v3/hiu/consent/request/notify",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["api", "v3", "hiu", "consent", "request", "notify"]
+								},
+								"description": "**Direction:** Gateway → HIU (callback)\n**Status:** Working\n\nGateway proactively notifies your HIU about consent status changes."
+							},
+							"response": []
+						}
+					],
+					"description": "Consent management from the HIU perspective."
+				},
+				{
+					"name": "Data Request",
+					"item": [
+						{
+							"name": "HIU→Gateway: Request Health Information",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}"
+									},
+									{
+										"key": "X-CM-ID",
+										"value": "sbx"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"hiRequest\": {\n    \"consent\": {\n      \"id\": \"{{consentArtefactId}}\"\n    },\n    \"dateRange\": {\n      \"from\": \"2025-01-01T00:00:00.000Z\",\n      \"to\": \"2026-03-18T23:59:59.000Z\"\n    },\n    \"dataPushUrl\": \"https://your-hiu-server.com/data/receive\",\n    \"keyMaterial\": {\n      \"cryptoAlg\": \"ECDH\",\n      \"curve\": \"Curve25519\",\n      \"dhPublicKey\": {\n        \"expiry\": \"2026-03-19T10:00:00.000Z\",\n        \"parameters\": \"Curve25519/32byte random key\",\n        \"keyValue\": \"YOUR_PUBLIC_KEY_BASE64\"\n      },\n      \"nonce\": \"YOUR_RANDOM_NONCE\"\n    }\n  }\n}"
+								},
+								"url": {
+									"raw": "{{gatewayBaseUrl}}/data-flow/v3/health-information/request",
+									"host": ["{{gatewayBaseUrl}}"],
+									"path": ["data-flow", "v3", "health-information", "request"]
+								},
+								"description": "**Direction:** HIU → Gateway\n**Status:** KNOWN 403 — WSO2 subscription issue in sandbox\n\nRequest health information from a HIP after consent. Generate ECDH Curve25519 key pair for encryption."
+							},
+							"response": []
+						}
+					],
+					"description": "Data request endpoints. NOTE: Returns 403 in sandbox (March 2026)."
+				}
+			],
+			"description": "M3 milestone: HIU services for consent management and health information requests.\n\nBase URL: {{gatewayBaseUrl}}"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// ============================================",
+					"// ABDM V3 — Auto-Authentication Pre-Request Script",
+					"// ============================================",
+					"// This script runs before every request in the collection.",
+					"// It automatically refreshes the access token when expired.",
+					"// ",
+					"// Requirements: Set clientId and clientSecret in your environment.",
+					"// ============================================",
+					"",
+					"const tokenExpiry = pm.environment.get('tokenExpiry');",
+					"const currentTime = Date.now();",
+					"",
+					"// Skip auth for the session endpoint itself",
+					"if (pm.request.url.toString().includes('/gateway/v3/sessions')) {",
+					"    return;",
+					"}",
+					"",
+					"// Check if token exists and is not expired (with 60s buffer)",
+					"if (!pm.environment.get('accessToken') || !tokenExpiry || currentTime > (parseInt(tokenExpiry) - 60000)) {",
+					"    const clientId = pm.environment.get('clientId');",
+					"    const clientSecret = pm.environment.get('clientSecret');",
+					"    const sessionUrl = pm.environment.get('gatewaySessionUrl');",
+					"    ",
+					"    if (!clientId || !clientSecret) {",
+					"        console.warn('ABDM Auto-Auth: clientId or clientSecret not set. Please configure your environment.');",
+					"        return;",
+					"    }",
+					"    ",
+					"    if (!sessionUrl) {",
+					"        console.warn('ABDM Auto-Auth: gatewaySessionUrl not set. Please configure your environment.');",
+					"        return;",
+					"    }",
+					"    ",
+					"    console.log('ABDM Auto-Auth: Token expired or missing. Refreshing...');",
+					"    ",
+					"    pm.sendRequest({",
+					"        url: sessionUrl,",
+					"        method: 'POST',",
+					"        header: {",
+					"            'Content-Type': 'application/json'",
+					"        },",
+					"        body: {",
+					"            mode: 'raw',",
+					"            raw: JSON.stringify({",
+					"                clientId: clientId,",
+					"                clientSecret: clientSecret,",
+					"                grantType: 'client_credentials'",
+					"            })",
+					"        }",
+					"    }, function (err, res) {",
+					"        if (err) {",
+					"            console.error('ABDM Auto-Auth: Request failed:', err);",
+					"            return;",
+					"        }",
+					"        ",
+					"        if (res.code === 200) {",
+					"            const jsonData = res.json();",
+					"            pm.environment.set('accessToken', jsonData.accessToken);",
+					"            const expiresIn = jsonData.expiresIn || 1800;",
+					"            pm.environment.set('tokenExpiry', String(currentTime + (expiresIn * 1000)));",
+					"            console.log('ABDM Auto-Auth: Token refreshed. Expires in ' + expiresIn + ' seconds.');",
+					"        } else {",
+					"            console.error('ABDM Auto-Auth: Failed with status ' + res.code + '. Check your clientId and clientSecret.');",
+					"        }",
+					"    });",
+					"}"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// ============================================",
+					"// ABDM V3 — Common Response Tests",
+					"// ============================================",
+					"",
+					"// Test: Response should be 2xx or known 403",
+					"pm.test('Response status is successful or expected 403', function () {",
+					"    pm.expect(pm.response.code).to.be.oneOf([200, 201, 202, 204, 403]);",
+					"});",
+					"",
+					"// Auto-extract and save common IDs from responses",
+					"if (pm.response.code >= 200 && pm.response.code < 300) {",
+					"    try {",
+					"        var jsonData = pm.response.json();",
+					"        ",
+					"        // Save transactionId",
+					"        if (jsonData.txnId) {",
+					"            pm.environment.set('transactionId', jsonData.txnId);",
+					"            console.log('Auto-saved transactionId:', jsonData.txnId);",
+					"        }",
+					"        ",
+					"        // Save consentId",
+					"        if (jsonData.consentRequest && jsonData.consentRequest.id) {",
+					"            pm.environment.set('consentId', jsonData.consentRequest.id);",
+					"            console.log('Auto-saved consentId:', jsonData.consentRequest.id);",
+					"        }",
+					"        ",
+					"        // Save consentArtefactId",
+					"        if (jsonData.consentArtefacts && jsonData.consentArtefacts.length > 0) {",
+					"            pm.environment.set('consentArtefactId', jsonData.consentArtefacts[0].id);",
+					"            console.log('Auto-saved consentArtefactId:', jsonData.consentArtefacts[0].id);",
+					"        }",
+					"        ",
+					"        // Save accessToken (from session endpoint)",
+					"        if (jsonData.accessToken && pm.request.url.toString().includes('/sessions')) {",
+					"            pm.environment.set('accessToken', jsonData.accessToken);",
+					"            var expiresIn = jsonData.expiresIn || 1800;",
+					"            pm.environment.set('tokenExpiry', String(Date.now() + (expiresIn * 1000)));",
+					"            console.log('Auto-saved accessToken. Expires in ' + expiresIn + 's.');",
+					"        }",
+					"        ",
+					"        // Save linkToken",
+					"        if (jsonData.linkToken) {",
+					"            pm.environment.set('linkToken', jsonData.linkToken);",
+					"            console.log('Auto-saved linkToken');",
+					"        }",
+					"    } catch (e) {",
+					"        // Response may not be JSON (e.g., ABHA card image/pdf)",
+					"    }",
+					"}",
+					"",
+					"// Helpful warning for 403 responses",
+					"if (pm.response.code === 403) {",
+					"    console.warn('403 Forbidden received. This endpoint may have a known WSO2 subscription issue in ABDM sandbox. See docs/KNOWN-ISSUES.md for details.');",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "collectionVersion",
+			"value": "1.0.0"
+		},
+		{
+			"key": "lastUpdated",
+			"value": "2026-03-18"
+		}
+	]
+}

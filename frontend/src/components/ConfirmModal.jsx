@@ -37,7 +37,7 @@ export default function ConfirmModal({
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
           className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
-          style={{ background: '#FFFFFF', borderColor: 'rgba(0,0,0,0.08)' }}
+          style={{ background: '#FFFFFF', borderColor: '#e0e7ff' }}
           role="dialog"
           aria-modal="true"
         >
@@ -47,7 +47,7 @@ export default function ConfirmModal({
             <div className="flex items-start gap-4">
               <div
                 className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border"
-                style={{ background: iconBg, color: iconFg, borderColor: 'rgba(0,0,0,0.06)' }}
+                style={{ background: iconBg, color: iconFg, borderColor: '#e0e7ff' }}
                 aria-hidden="true"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -62,12 +62,12 @@ export default function ConfirmModal({
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t flex items-center justify-end gap-3" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
+          <div className="px-6 py-4 border-t flex items-center justify-end gap-3" style={{ borderColor: '#e0e7ff' }}>
             <button
               type="button"
               onClick={() => onCancel?.()}
               className="px-4 py-2.5 rounded-xl text-sm font-extrabold border bg-white hover:bg-gray-50 transition"
-              style={{ borderColor: 'rgba(0,0,0,0.12)', color: '#374151' }}
+              style={{ borderColor: '#d5d7eb', color: '#374151' }}
             >
               {cancelText}
             </button>

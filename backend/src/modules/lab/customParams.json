@@ -1,0 +1,31 @@
+{
+  "Biochemistry::LFT": [
+    {
+      "id": "mqfpl4h7v39j",
+      "department": "Biochemistry",
+      "testName": "LFT",
+      "parameter": "Total Bilirubin",
+      "unit": "mg/dL",
+      "referenceRange": "0.2-1.2",
+      "createdAt": "2026-06-15T21:11:59.467Z"
+    },
+    {
+      "id": "mqfpl6kv8m2u",
+      "department": "Biochemistry",
+      "testName": "LFT",
+      "parameter": "Direct Bilirubin",
+      "unit": "mg/dL",
+      "referenceRange": "0-0.3",
+      "createdAt": "2026-06-15T21:12:02.191Z"
+    },
+    {
+      "id": "mqfpl6l1t0q5",
+      "department": "Biochemistry",
+      "testName": "LFT",
+      "parameter": "Direct Bilirubin",
+      "unit": "mg/dL",
+      "referenceRange": "0-0.3",
+      "createdAt": "2026-06-15T21:12:02.197Z"
+    }
+  ]
+}

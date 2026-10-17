@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { MdEditNote, MdMonitorHeart, MdReceiptLong, MdScience } from 'react-icons/md';
+import { MdBed, MdAssignment, MdMedicalServices, MdChecklist, MdMonitorHeart, MdScience, MdEditNote, MdReceiptLong, MdHistory } from 'react-icons/md';
 import {
   NurseAdmissionPanel,
   NurseAssessmentPanel,
@@ -9,6 +9,9 @@ import {
   NurseICUMonitoringPanel,
 } from './NurseClinicalSections';
 import PatientLabReportsPanel from '../../../components/PatientLabReportsPanel';
+import NurseLabTestRequestPanel from './NurseLabTestRequestPanel';
+import NurseMedicineRequestPanel from './NurseMedicineRequestPanel';
+import NurseDailyExpensesPanel from './NurseDailyExpensesPanel';
 import api from '../../../utils/api';
 import { admissionIdFromRow, isAdmissionUuid } from '../../../utils/admissionId';
 import './PatientDetails.css';
@@ -102,8 +105,12 @@ export default function PatientDetails() {
   const [doctorUpdatesLoading, setDoctorUpdatesLoading] = useState(false);
   const [doctorUpdatesError, setDoctorUpdatesError] = useState('');
   const [doctorUpdatesData, setDoctorUpdatesData] = useState(null);
+  const [historyTimeline, setHistoryTimeline] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
   /** Mobile-only: 'daily' | 'treatment' | null — full doctor updates in modal */
   const [doctorUpdatesModal, setDoctorUpdatesModal] = useState(null);
+  const [administeredTpMeds, setAdministeredTpMeds] = useState({});
 
   // Search (when no patient id is provided)
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,6 +118,28 @@ export default function PatientDetails() {
   const persistRecord = (next) => {
     if (!next?.patient?.id) return;
     localStorage.setItem(recordKey(next.patient.id), JSON.stringify({ ...next, updatedAt: new Date().toISOString() }));
+  };
+
+  const handleToggleTpMed = (medName) => {
+    if (!admissionId || !medName) return;
+    const current = administeredTpMeds[medName] || { status: 'Pending', time: '' };
+    const nextStatus = current.status === 'Given' ? 'Pending' : 'Given';
+    const nextTime = nextStatus === 'Given'
+      ? new Date().toLocaleString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      : '';
+    const nextMap = {
+      ...administeredTpMeds,
+      [medName]: { status: nextStatus, time: nextTime },
+    };
+    setAdministeredTpMeds(nextMap);
+    localStorage.setItem(`administered_tp_meds_${admissionId}`, JSON.stringify(nextMap));
   };
 
   const fetchPatientDetails = async () => {
@@ -191,6 +220,12 @@ export default function PatientDetails() {
       const nextMeds = Array.isArray(stored?.medications) ? stored.medications.map((m) => ({ ...m, route: m.route || 'Oral' })) : defaultMeds;
 
       setAdmissionId(aid);
+      try {
+        const storedAdmin = localStorage.getItem(`administered_tp_meds_${aid}`);
+        setAdministeredTpMeds(storedAdmin ? JSON.parse(storedAdmin) : {});
+      } catch {
+        setAdministeredTpMeds({});
+      }
       setPatient(nextPatient);
       setVitals(nextVitals);
       setVitalsHistory(historyV);
@@ -458,7 +493,7 @@ export default function PatientDetails() {
   const panelOrder = useMemo(() => {
     const order = ['admission', 'assessment', 'doctor', 'tasks'];
     if (isIcuWard) order.push('icu');
-    order.push('medications', 'doctor_updates', 'lab_reports');
+    order.push('medications', 'medicine_request', 'daily_expenses', 'doctor_updates', 'patient_history', 'lab_request', 'lab_reports');
     return order;
   }, [isIcuWard]);
 
@@ -513,6 +548,26 @@ export default function PatientDetails() {
     if (activePanel !== 'doctor_updates') return;
     loadDoctorUpdates();
   }, [activePanel, admissionId, loadDoctorUpdates]);
+
+  const loadPatientHistory = useCallback(async () => {
+    if (!admissionId || !isAdmissionUuid(admissionId)) return;
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const res = await api.get(`/admissions/${admissionId}/history`);
+      setHistoryTimeline(Array.isArray(res.data?.timeline) ? res.data.timeline : []);
+    } catch (err) {
+      setHistoryError(err?.response?.data?.message || 'Could not load patient history');
+      setHistoryTimeline([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [admissionId]);
+
+  useEffect(() => {
+    if (activePanel !== 'patient_history') return;
+    loadPatientHistory();
+  }, [activePanel, loadPatientHistory]);
 
   const goPanelPrev = () => {
     const i = panelOrder.indexOf(activePanel);
@@ -780,14 +835,12 @@ export default function PatientDetails() {
           />
         );
       case 'doctor':
-        return <NurseDoctorOrdersPanel patientId={patient.id} treatmentPlan={treatmentPlan} />;
+        return <NurseDoctorOrdersPanel patientId={patient.id} admissionId={admissionId} />;
       case 'tasks':
         return (
           <NurseTasksPanel
             patientId={patient.id}
             admissionId={admissionId}
-            tasksSeed={nurseCare?.nurseTasks}
-            onPersistPatch={persistNurseCarePatch}
           />
         );
       case 'icu':
@@ -891,28 +944,51 @@ export default function PatientDetails() {
                 </p>
               ) : null}
               {medRows.length > 0 ? (
-                <div className="patient-details-du-table-wrap patient-details-du-table-wrap--tight">
-                  <p className="patient-details-du-inline-label">Medicines</p>
-                  <table className="patient-details-du-table">
-                    <thead>
-                      <tr>
-                        <th>Medicine</th>
-                        <th>Dosage</th>
-                        <th>Duration</th>
-                        <th>Mode</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {medRows.map((row) => (
-                        <tr key={`${rowKeyPrefix}${row.key}`}>
-                          <td>{row.name || '—'}</td>
-                          <td>{row.dosage || '—'}</td>
-                          <td>{row.duration || '—'}</td>
-                          <td>{row.mode || '—'}</td>
+                <div style={{ marginTop: '16px' }}>
+                  <p className="patient-details-du-inline-label" style={{ marginBottom: '8px' }}>Medicines</p>
+                  <div className="patient-details-du-table-wrap">
+                    <table className="patient-details-du-table">
+                      <thead>
+                        <tr>
+                          <th>Medicine</th>
+                          <th>Dosage</th>
+                          <th>Duration</th>
+                          <th>Mode</th>
+                          <th>Status</th>
+                          <th>Administered At</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {medRows.map((row) => {
+                          const admin = administeredTpMeds[row.name] || { status: 'Pending', time: '' };
+                          return (
+                            <tr key={`${rowKeyPrefix}${row.key}`}>
+                              <td>{row.name || '—'}</td>
+                              <td>{row.dosage || '—'}</td>
+                              <td>{row.duration || '—'}</td>
+                              <td>{row.mode || '—'}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleTpMed(row.name)}
+                                  className={`px-2 py-1 rounded text-[11px] font-bold text-white transition-colors ${
+                                    admin.status === 'Given' 
+                                      ? 'bg-emerald-600 hover:bg-emerald-700' 
+                                      : 'bg-amber-500 hover:bg-amber-600'
+                                  }`}
+                                >
+                                  {admin.status === 'Given' ? 'Given' : 'Mark Given'}
+                                </button>
+                              </td>
+                              <td className="patient-details-du-table-nowrap" style={{ fontSize: '11px', color: '#475569' }}>
+                                {admin.time || '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : null}
             </>
@@ -1042,6 +1118,134 @@ export default function PatientDetails() {
           </Fragment>
         );
       }
+      case 'patient_history': {
+        return (
+          <section className="patient-details-card patient-details-card--activeBlock">
+            <header className="patient-details-cardHeader">
+              <div className="patient-details-cardTitle">
+                <span className="patient-details-cardIcon patient-details-cardIconAlt">
+                  <MdHistory className="patient-details-cardIconSvg" />
+                </span>
+                <div className="patient-details-cardTitleText">
+                  <h2 className="patient-details-cardH2">Patient Admission History</h2>
+                  <p className="patient-details-cardP">Unified timeline of doctor plans, daily notes, and nursing updates</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="patient-details-btn patient-details-btn-secondary patient-details-btn-compact"
+                onClick={() => loadPatientHistory()}
+                disabled={historyLoading || !admissionId}
+              >
+                {historyLoading ? 'Refreshing…' : 'Refresh'}
+              </button>
+            </header>
+            <div className="patient-details-cardBody" style={{ padding: '24px' }}>
+              {historyLoading ? (
+                <p className="patient-details-muted">Loading history...</p>
+              ) : historyError ? (
+                <p className="patient-details-error-text">{historyError}</p>
+              ) : historyTimeline.length === 0 ? (
+                <p className="patient-details-muted">No history entries logged for this admission yet.</p>
+              ) : (
+                <div className="patient-history-timeline-container" style={{ borderLeft: '2px solid rgba(0,0,0,0.06)', marginLeft: '12px', paddingLeft: '24px', position: 'relative' }}>
+                  {historyTimeline.map((item) => (
+                    <div key={item.id} className="patient-history-timeline-item" style={{ marginBottom: '24px', position: 'relative' }}>
+                      {/* Timeline dot */}
+                      <span className="patient-history-timeline-dot" style={{
+                        position: 'absolute',
+                        left: '-31px',
+                        top: '4px',
+                        display: 'flex',
+                        height: '12px',
+                        width: '12px',
+                        borderRadius: '50%',
+                        backgroundColor:
+                          item.type === 'TREATMENT_PLAN' ? '#F59E0B' :
+                          item.type === 'DOCTOR_NOTE' ? '#0077B6' :
+                          item.type === 'VITALS' ? '#6366F1' : '#10B981',
+                        border: '2px solid #FFF',
+                        boxShadow: '0 0 0 4px rgba(0,0,0,0.03)'
+                      }} />
+
+                      {/* Content block */}
+                      <div className="patient-history-timeline-content" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div className="patient-history-timeline-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 'bold', color: '#1E293B' }}>{item.title}</h4>
+                          <span style={{ fontSize: '10px', color: '#94A3B8', fontWeight: '600' }}>
+                            {formatClinicalDateTime(item.createdAt)}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '11px', color: '#64748B', fontWeight: '600' }}>
+                          By <span style={{ color: '#0077B6' }}>{item.authorName}</span>
+                        </p>
+
+                        {/* Note/Description text */}
+                        {item.description && (
+                          <div style={{
+                            marginTop: '4px',
+                            fontSize: '12px',
+                            color: '#334155',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #F1F5F9',
+                            borderRadius: '8px',
+                            padding: '10px 14px',
+                            lineHeight: '1.5',
+                            whiteSpace: 'pre-wrap'
+                          }}>
+                            {item.description}
+                          </div>
+                        )}
+
+                        {/* Instructions & Medicines for treatment plan */}
+                        {item.type === 'TREATMENT_PLAN' && (
+                          <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '6px', paddingLeft: '8px' }}>
+                            {item.instructions && (
+                              <p style={{ margin: 0, fontSize: '11px', color: '#475569', fontWeight: '500' }}>
+                                <span style={{ fontWeight: 'bold', color: '#334155' }}>Instructions:</span> {item.instructions}
+                              </p>
+                            )}
+                            {Array.isArray(item.medicines) && item.medicines.length > 0 && (
+                              <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '8px', backgroundColor: '#FFF' }}>
+                                <table style={{ minWidth: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                  <thead>
+                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                      <th style={{ padding: '6px 12px', textAlign: 'left', fontWeight: 'bold', color: '#64748B' }}>Medicine</th>
+                                      <th style={{ padding: '6px 12px', textAlign: 'left', fontWeight: 'bold', color: '#64748B' }}>Dosage</th>
+                                      <th style={{ padding: '6px 12px', textAlign: 'left', fontWeight: 'bold', color: '#64748B' }}>Duration</th>
+                                      <th style={{ padding: '6px 12px', textAlign: 'left', fontWeight: 'bold', color: '#64748B' }}>Mode</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {item.medicines.map((m, idx) => (
+                                      <tr key={idx} style={{ borderBottom: idx < item.medicines.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                                        <td style={{ padding: '6px 12px', fontWeight: 'bold', color: '#334155' }}>{m.medicine || m.name || '—'}</td>
+                                        <td style={{ padding: '6px 12px', color: '#475569', fontWeight: '600' }}>{m.dosage || '—'}</td>
+                                        <td style={{ padding: '6px 12px', color: '#475569', fontWeight: '600' }}>{m.duration || '—'}</td>
+                                        <td style={{ padding: '6px 12px', color: '#475569', fontWeight: '600' }}>{m.mode || '—'}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      }
+      case 'medicine_request':
+        return <NurseMedicineRequestPanel admissionId={admissionId} patient={patient} />;
+      case 'daily_expenses':
+        return <NurseDailyExpensesPanel admissionId={admissionId} />;
+      case 'lab_request':
+        return <NurseLabTestRequestPanel admissionId={admissionId} patientId={patient.id} />;
       case 'lab_reports':
         return (
           <section className="patient-details-card patient-details-card--activeBlock">
@@ -1134,7 +1338,7 @@ export default function PatientDetails() {
                     )}
                   </div>
                   {!vitalsEditOpen ? (
-                    <div className="patient-details-vitals-grid patient-details-vitals-grid--left">
+                    <div className="patient-details-vitals-grid">
                       <div className="patient-details-vitals-item">
                         <p className="patient-details-vitals-label">BP</p>
                         <p className="patient-details-vitals-value patient-details-mono">{draft.vitals.bp || '—'}</p>
@@ -1153,7 +1357,7 @@ export default function PatientDetails() {
                       </div>
                     </div>
                   ) : (
-                    <div className="patient-details-vitals-form patient-details-vitals-form--left">
+                    <div className="patient-details-vitals-form">
                       <div className="patient-details-field">
                         <label className="patient-details-field-label" htmlFor="patient-details-bp">
                           BP
@@ -1289,31 +1493,27 @@ export default function PatientDetails() {
                 <div className="patient-details-panel-grid patient-details-panel-grid--full">
                   <button
                     type="button"
-                    className={`patient-details-panel-pill${activePanel === 'admission' ? ' patient-details-panel-pill--active' : ''}`}
-                    onClick={() => setActivePanel('admission')}
-                  >
-                    Admission (IPD / ICU)
-                  </button>
-                  <button
-                    type="button"
                     className={`patient-details-panel-pill${activePanel === 'assessment' ? ' patient-details-panel-pill--active' : ''}`}
                     onClick={() => setActivePanel('assessment')}
                   >
-                    Nursing assessment
+                    <MdAssignment className="patient-details-panel-icon" />
+                    <span>Assessment</span>
                   </button>
                   <button
                     type="button"
                     className={`patient-details-panel-pill${activePanel === 'doctor' ? ' patient-details-panel-pill--active' : ''}`}
                     onClick={() => setActivePanel('doctor')}
                   >
-                    Doctor orders
+                    <MdMedicalServices className="patient-details-panel-icon" />
+                    <span>Doctor Orders</span>
                   </button>
                   <button
                     type="button"
                     className={`patient-details-panel-pill${activePanel === 'tasks' ? ' patient-details-panel-pill--active' : ''}`}
                     onClick={() => setActivePanel('tasks')}
                   >
-                    My tasks
+                    <MdChecklist className="patient-details-panel-icon" />
+                    <span>My Tasks</span>
                   </button>
                   {isIcuWard ? (
                     <button
@@ -1321,7 +1521,8 @@ export default function PatientDetails() {
                       className={`patient-details-panel-pill${activePanel === 'icu' ? ' patient-details-panel-pill--active' : ''}`}
                       onClick={() => setActivePanel('icu')}
                     >
-                      ICU monitoring
+                      <MdMonitorHeart className="patient-details-panel-icon" />
+                      <span>ICU</span>
                     </button>
                   ) : null}
                   <button
@@ -1329,40 +1530,65 @@ export default function PatientDetails() {
                     className={`patient-details-panel-pill${activePanel === 'medications' ? ' patient-details-panel-pill--active' : ''}`}
                     onClick={() => setActivePanel('medications')}
                   >
-                    Medicines (MAR)
+                    <MdScience className="patient-details-panel-icon" />
+                    <span>Medicines</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`patient-details-panel-pill${activePanel === 'medicine_request' ? ' patient-details-panel-pill--active' : ''}`}
+                    onClick={() => setActivePanel('medicine_request')}
+                  >
+                    <MdMedicalServices className="patient-details-panel-icon" />
+                    <span>Medicine Request</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`patient-details-panel-pill${activePanel === 'daily_expenses' ? ' patient-details-panel-pill--active' : ''}`}
+                    onClick={() => setActivePanel('daily_expenses')}
+                  >
+                    <MdReceiptLong className="patient-details-panel-icon" />
+                    <span>Daily Expenses</span>
                   </button>
                   <button
                     type="button"
                     className={`patient-details-panel-pill${activePanel === 'doctor_updates' ? ' patient-details-panel-pill--active' : ''}`}
                     onClick={() => setActivePanel('doctor_updates')}
                   >
-                    Doctor Update
+                    <MdEditNote className="patient-details-panel-icon" />
+                    <span>Doctor Update</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`patient-details-panel-pill${activePanel === 'patient_history' ? ' patient-details-panel-pill--active' : ''}`}
+                    onClick={() => setActivePanel('patient_history')}
+                  >
+                    <MdHistory className="patient-details-panel-icon" />
+                    <span>History</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`patient-details-panel-pill${activePanel === 'lab_request' ? ' patient-details-panel-pill--active' : ''}`}
+                    onClick={() => setActivePanel('lab_request')}
+                  >
+                    <MdScience className="patient-details-panel-icon" />
+                    <span>Lab Request</span>
                   </button>
                   <button
                     type="button"
                     className={`patient-details-panel-pill${activePanel === 'lab_reports' ? ' patient-details-panel-pill--active' : ''}`}
                     onClick={() => setActivePanel('lab_reports')}
                   >
-                    Lab reports
+                    <MdReceiptLong className="patient-details-panel-icon" />
+                    <span>Lab Reports</span>
                   </button>
                 </div>
 
                 <div className="patient-details-panel-nav-row">
-                  <button
-                    type="button"
-                    className="patient-details-btn patient-details-btn-secondary"
-                    onClick={goPanelPrev}
-                    disabled={activePanelIndex <= 0}
-                  >
-                    Previous
+                  <button type="button" className="patient-details-btn patient-details-btn-secondary" onClick={goPanelPrev} disabled={activePanelIndex <= 0}>
+                    ← Prev
                   </button>
-                  <button
-                    type="button"
-                    className="patient-details-btn patient-details-btn-primary"
-                    onClick={goPanelNext}
-                    disabled={activePanelIndex >= panelOrder.length - 1}
-                  >
-                    Next
+                  <button type="button" className="patient-details-btn patient-details-btn-primary" onClick={goPanelNext} disabled={activePanelIndex >= panelOrder.length - 1}>
+                    Next →
                   </button>
                 </div>
 

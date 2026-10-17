@@ -86,7 +86,10 @@ const getDashboard = async (req, res) => {
     const weekStart = toStartOfDay(last7[0]);
     const weekEnd = toEndOfDay(last7[6]);
 
-    const billWhereFinalized = { status: { notIn: ['DRAFT', 'CANCELLED'] } };
+    const billWhereFinalized = {
+      status: { notIn: ['DRAFT', 'CANCELLED'] },
+      NOT: { tokenNumber: { startsWith: 'IPD', mode: 'insensitive' } },
+    };
 
     const [
       todaySalesAgg,
@@ -99,6 +102,8 @@ const getDashboard = async (req, res) => {
       batchMap,
       suppliersRaw,
       supplierStats,
+      weekReturns,
+      pendingOtIssuesCount,
     ] = await Promise.all([
       prisma.pharmacyBill.aggregate({
         where: { ...billWhereFinalized, createdAt: { gte: todayStart, lte: todayEnd } },
@@ -146,10 +151,31 @@ const getDashboard = async (req, res) => {
         _count: true,
         _sum: { outstandingAmount: true },
       }),
+      prisma.pharmacyReturn.findMany({
+        where: {
+          returnType: 'CUSTOMER_RETURN',
+          status: 'COMPLETED',
+          approvedAt: { gte: weekStart, lte: todayEnd },
+        },
+        select: { approvedAt: true, totalAmount: true, bill: { select: { billingType: true } } },
+      }),
+      prisma.otMedicineIssue.count({ where: { status: 'REQUESTED' } }),
     ]);
 
-    const todaySales = roundMoney(Number(todaySalesAgg._sum.grandTotal || 0));
-    const yesterdaySales = roundMoney(Number(yesterdaySalesAgg._sum.grandTotal || 0));
+    let todayReturnAmt = 0;
+    let yesterdayReturnAmt = 0;
+    (weekReturns || []).forEach((r) => {
+      const date = r.approvedAt ? new Date(r.approvedAt) : null;
+      if (!date) return;
+      if (date >= todayStart && date <= todayEnd) {
+        todayReturnAmt += Number(r.totalAmount || 0);
+      } else if (date >= yesterdayStart && date <= yesterdayEnd) {
+        yesterdayReturnAmt += Number(r.totalAmount || 0);
+      }
+    });
+
+    const todaySales = roundMoney(Math.max(0, Number(todaySalesAgg._sum.grandTotal || 0) - todayReturnAmt));
+    const yesterdaySales = roundMoney(Math.max(0, Number(yesterdaySalesAgg._sum.grandTotal || 0) - yesterdayReturnAmt));
     let salesChangePct = 0;
     if (yesterdaySales > 0) {
       salesChangePct = Math.round(((todaySales - yesterdaySales) / yesterdaySales) * 100);
@@ -162,6 +188,13 @@ const getDashboard = async (req, res) => {
       const key = dateKey(new Date(b.createdAt));
       if (salesByDay.has(key)) {
         salesByDay.set(key, salesByDay.get(key) + Number(b.grandTotal));
+      }
+    });
+    (weekReturns || []).forEach((r) => {
+      if (!r.approvedAt) return;
+      const key = dateKey(new Date(r.approvedAt));
+      if (salesByDay.has(key)) {
+        salesByDay.set(key, Math.max(0, salesByDay.get(key) - Number(r.totalAmount)));
       }
     });
 
@@ -177,6 +210,14 @@ const getDashboard = async (req, res) => {
       const amt = Number(b.grandTotal);
       if (b.billingType === 'WALK_IN') walkInAmount += amt;
       else hospitalAmount += amt;
+    });
+    (weekReturns || []).forEach((r) => {
+      const amt = Number(r.totalAmount || 0);
+      if (r.bill?.billingType === 'WALK_IN') {
+        walkInAmount = Math.max(0, walkInAmount - amt);
+      } else {
+        hospitalAmount = Math.max(0, hospitalAmount - amt);
+      }
     });
     hospitalAmount = roundMoney(hospitalAmount);
     walkInAmount = roundMoney(walkInAmount);
@@ -231,6 +272,7 @@ const getDashboard = async (req, res) => {
       lowStockCount,
       suppliersCount: totalSuppliers,
       suppliersNeedFollowUp,
+      pendingOtIssuesCount,
     };
 
     const pendingPrescriptions = queueRows.map((row) => ({

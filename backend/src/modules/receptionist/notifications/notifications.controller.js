@@ -1,4 +1,4 @@
-const { prisma } = require('../../../config/prisma');
+const { prisma, withDbRetry } = require('../../../config/prisma');
 
 function normalizeType(value) {
   const s = String(value || '').trim().toUpperCase();
@@ -19,24 +19,31 @@ async function listNotifications(req, res) {
   if (type) where.type = type;
   if (unreadOnly) where.readAt = null;
 
-  const rows = await prisma.notification.findMany({
-    where,
-    orderBy: [{ createdAt: 'desc' }],
-    take,
-    select: { id: true, type: true, severity: true, title: true, message: true, readAt: true, createdAt: true },
-  });
+  try {
+    const rows = await withDbRetry(() =>
+      prisma.notification.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }],
+        take,
+        select: { id: true, type: true, severity: true, title: true, message: true, readAt: true, createdAt: true },
+      }),
+    );
 
-  return res.json({
-    notifications: rows.map((n) => ({
-      id: n.id,
-      type: n.type,
-      severity: n.severity,
-      title: n.title,
-      message: n.message,
-      read_at: n.readAt,
-      created_at: n.createdAt,
-    })),
-  });
+    return res.json({
+      notifications: rows.map((n) => ({
+        id: n.id,
+        type: n.type,
+        severity: n.severity,
+        title: n.title,
+        message: n.message,
+        read_at: n.readAt,
+        created_at: n.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('listNotifications error:', err?.message || err);
+    return res.status(503).json({ message: 'Database temporarily unavailable' });
+  }
 }
 
 async function markRead(req, res) {
@@ -69,5 +76,32 @@ async function markAllRead(req, res) {
   return res.json({ ok: true, updated: updated.count || 0 });
 }
 
-module.exports = { listNotifications, markRead, markAllRead };
+async function getModuleCounts(req, res) {
+  try {
+    // Sequential queries — parallel Promise.all exhausts Render cloud PG connection pool
+    const data = await withDbRetry(async () => {
+      const otPendingBill = await prisma.otRequest.count({ where: { status: 'OT_REQUEST_CREATED' } });
+      const otApproved = await prisma.otRequest.count({ where: { status: 'APPROVED_FOR_OT' } });
+      const pendingDischarge = await prisma.admission.count({
+        where: { status: 'DISCHARGE_REQUESTED', dischargeRequestedAt: { not: null } },
+      });
+      const pendingLabPayments = await prisma.bill.count({
+        where: { status: { in: ['PENDING', 'PARTIAL'] }, labOrders: { some: {} } },
+      });
+      const advisedLabTests = await prisma.labOrder.count({ where: { billId: null } });
+      const pendingBills = await prisma.bill.count({ where: { status: { in: ['PENDING', 'PARTIAL'] } } });
+      const activeIpd = await prisma.admission.count({
+        where: { status: { in: ['ADMITTED', 'UNDER_TREATMENT'] } },
+      });
+      return { otPendingBill, otApproved, pendingDischarge, pendingLabPayments, advisedLabTests, pendingBills, activeIpd };
+    });
+
+    return res.json(data);
+  } catch (err) {
+    console.error('getModuleCounts error:', err?.message || err);
+    return res.status(503).json({ message: 'Could not load module counts' });
+  }
+}
+
+module.exports = { listNotifications, markRead, markAllRead, getModuleCounts };
 

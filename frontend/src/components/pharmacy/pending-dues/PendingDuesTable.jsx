@@ -1,3 +1,4 @@
+
 const STATUS_STYLES = {
   PENDING: 'bg-amber-50 text-amber-800 border-amber-200',
   PARTIALLY_PAID: 'bg-blue-50 text-blue-800 border-blue-200',

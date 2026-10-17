@@ -1,4 +1,4 @@
-# New H T Hospital Management System
+# VyanX Hospital Management System
 
 A hospital management system for managing patients, doctors, appointments, and more.
 
@@ -8,7 +8,7 @@ Clone the repository and follow the setup instructions below.
 
 ```bash
 git clone <repo-url>
-cd HT-Hospital
+cd VyanX
 ```
 
 ## Contributing

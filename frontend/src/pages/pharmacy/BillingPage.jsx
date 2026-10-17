@@ -19,6 +19,7 @@ import PaymentSection from '../../components/pharmacy/billing/PaymentSection';
 import RecentBillsTable from '../../components/pharmacy/billing/RecentBillsTable';
 import { calcBillTotals, money } from '../../lib/pharmacy/billingCalc';
 import {
+  cancelBill,
   createBill,
   fetchBillById,
   fetchBills,
@@ -340,6 +341,23 @@ export default function BillingPage() {
     }
   };
 
+  const handleDeleteDraft = async (billId, billNumber) => {
+    if (!window.confirm(`Are you sure you want to delete draft bill "${billNumber}"?`)) return;
+    try {
+      await cancelBill(billId);
+      setToast({ type: 'success', message: `Draft bill ${billNumber} deleted` });
+      if (editingBillId === billId) {
+        resetBillingForm();
+      }
+      loadBills();
+    } catch (e) {
+      setToast({
+        type: 'error',
+        message: e.response?.data?.message || 'Failed to delete draft bill',
+      });
+    }
+  };
+
   const buildPayload = (extra = {}) => {
     const items = lineItems.map((item) => ({
       medicineId: item.medicineId,
@@ -597,6 +615,7 @@ export default function BillingPage() {
           loading={loadingBills || resumingDraft}
           onPrint={printPharmacyBill}
           onResume={handleResumeDraft}
+          onDelete={handleDeleteDraft}
           editingBillId={editingBillId}
         />
       </section>

@@ -35,12 +35,12 @@ export default function NotesSection({ admissionId }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border p-5" style={{ background: '#FFFFFF', borderColor: 'rgba(0,0,0,0.06)' }}>
+      <div className="rounded-2xl border p-5" style={{ background: '#FFFFFF', borderColor: '#e0e7ff' }}>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           className="w-full px-4 py-3 rounded-xl border bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 min-h-[110px] text-sm"
-          style={{ borderColor: 'rgba(0,0,0,0.12)' }}
+          style={{ borderColor: '#d5d7eb' }}
           placeholder="Add note"
         />
         <div className="flex justify-end mt-3">
@@ -66,7 +66,7 @@ export default function NotesSection({ admissionId }) {
         </div>
       </div>
 
-      <div className="rounded-2xl border overflow-hidden" style={{ background: '#FFFFFF', borderColor: 'rgba(0,0,0,0.06)' }}>
+      <div className="rounded-2xl border overflow-hidden" style={{ background: '#FFFFFF', borderColor: '#e0e7ff' }}>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
@@ -83,7 +83,7 @@ export default function NotesSection({ admissionId }) {
                 <tr><td colSpan={3} className="px-5 py-6 text-gray-500">No notes.</td></tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} className="border-t" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
+                  <tr key={r.id} className="border-t" style={{ borderColor: '#e0e7ff' }}>
                     <td className="px-5 py-3 text-gray-700 font-extrabold">
                       {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
                     </td>

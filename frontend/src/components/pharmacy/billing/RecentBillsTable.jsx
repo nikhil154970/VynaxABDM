@@ -18,7 +18,7 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function RecentBillsTable({ bills, loading, onPrint, onResume, editingBillId }) {
+export default function RecentBillsTable({ bills, loading, onPrint, onResume, onDelete, editingBillId }) {
   if (loading) {
     return (
       <div className="space-y-2 p-4">
@@ -63,18 +63,27 @@ export default function RecentBillsTable({ bills, loading, onPrint, onResume, ed
               <td className="border-b border-slate-100 px-2.5 py-2.5">
                 <div className="flex flex-wrap gap-1">
                   {bill.status === 'DRAFT' && onResume ? (
-                    <button
-                      type="button"
-                      onClick={() => onResume(bill.id)}
-                      className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
-                        editingBillId === bill.id
-                          ? 'border-violet-300 bg-violet-50 text-violet-700'
-                          : 'border-violet-200 text-violet-700 hover:bg-violet-50'
-                      }`}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      {editingBillId === bill.id ? 'Editing' : 'Resume'}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onResume(bill.id)}
+                        className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                          editingBillId === bill.id
+                            ? 'border-violet-300 bg-violet-50 text-violet-700'
+                            : 'border-violet-200 text-violet-700 hover:bg-violet-50'
+                        }`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        {editingBillId === bill.id ? 'Editing' : 'Resume'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete && onDelete(bill.id, bill.billNumber)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </>
                   ) : null}
                   {bill.status !== 'DRAFT' ? (
                     <button

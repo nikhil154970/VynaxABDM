@@ -20,7 +20,7 @@ function truncate(text, max = 48) {
 
 export default function HistoryTable({ rows = [], onRowClick }) {
   return (
-    <div className="rounded-2xl border overflow-hidden" style={{ background: '#FFFFFF', borderColor: 'rgba(0,0,0,0.06)' }}>
+    <div className="rounded-2xl border overflow-hidden" style={{ background: '#FFFFFF', borderColor: '#e0e7ff' }}>
       <div className="overflow-x-auto max-h-[520px]">
         <table className="min-w-full text-sm">
           <thead>
@@ -40,7 +40,7 @@ export default function HistoryTable({ rows = [], onRowClick }) {
                 <tr
                   key={`${r.type}-${r.id}`}
                   className="border-t"
-                  style={{ borderColor: 'rgba(0,0,0,0.06)', cursor: onRowClick ? 'pointer' : 'default' }}
+                  style={{ borderColor: '#e0e7ff', cursor: onRowClick ? 'pointer' : 'default' }}
                   onClick={() => onRowClick?.(r)}
                 >
                   <td className="px-5 py-3 text-gray-900 font-extrabold">{fmtDate(r.date)}</td>

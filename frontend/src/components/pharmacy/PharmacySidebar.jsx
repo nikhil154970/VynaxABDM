@@ -45,15 +45,15 @@ function PharmacyMenuItem({ item, collapsed, onNavClick }) {
       <button
         type="button"
         onClick={handleClick}
-        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group hover:bg-white/10"
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group hover:bg-[rgba(0,180,216,0.15)]"
         style={{
-          background: isActive ? 'rgba(0, 174, 239, 0.22)' : 'transparent',
+          background: isActive ? '#0077B6' : 'transparent',
           color: '#FFFFFF',
         }}
       >
         <Icon
           className="w-5 h-5 shrink-0"
-          style={{ color: isActive ? '#00AEEF' : 'rgba(255,255,255,0.80)' }}
+          style={{ color: isActive ? '#FFFFFF' : '#90E0EF' }}
           strokeWidth={2}
         />
         {!collapsed && (
@@ -84,14 +84,10 @@ function PharmacyMenuItem({ item, collapsed, onNavClick }) {
                 startNavigationLoading();
                 onNavClick?.();
               }}
-              className={({ isActive: childActive }) =>
-                `block px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:bg-white/10 ${
-                  childActive ? '' : ''
-                }`
-              }
+              className="block px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:bg-[rgba(0,180,216,0.15)]"
               style={({ isActive: childActive }) => ({
-                background: childActive ? '#00AEEF' : 'transparent',
-                color: childActive ? '#FFFFFF' : 'rgba(255,255,255,0.82)',
+                background: childActive ? '#0077B6' : 'transparent',
+                color: '#FFFFFF',
               })}
             >
               {c.label}
@@ -112,15 +108,15 @@ function PharmacySidebarInner({ collapsed, setCollapsed, onNavClick, onLogout })
       >
         <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg bg-white">
           <img
-            src="/hopital_logo.png"
-            alt="New H T Hospital"
+            src="/mqe_logo.png"
+            alt="VyanX"
             className="w-7 h-7 object-contain"
             draggable={false}
           />
         </div>
         {!collapsed && (
           <div className="flex-1 overflow-hidden">
-            <p className="text-sm font-bold text-white truncate">New H T Hospital</p>
+            <p className="text-sm font-bold text-white truncate">VyanX Hospital Management System</p>
             <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.70)' }}>HIMS</p>
           </div>
         )}
@@ -181,7 +177,7 @@ function PharmacySidebarInner({ collapsed, setCollapsed, onNavClick, onLogout })
 }
 
 const asideStyle = {
-  background: '#2D2A6E',
+  background: '#001B48',
   borderRight: '1px solid rgba(255,255,255,0.14)',
 };
 
@@ -204,7 +200,7 @@ export default function PharmacySidebar({ collapsed, setCollapsed }) {
         type="button"
         onClick={() => setMobileOpen(true)}
         className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-xl shadow-lg"
-        style={{ background: '#2D2A6E', color: '#fff' }}
+        style={{ background: '#001B48', color: '#fff' }}
         aria-label="Open menu"
       >
         <Menu className="w-6 h-6" strokeWidth={2} />

@@ -95,9 +95,15 @@
 }
 
 .hbt-filter-active {
-  border-color: #cbd5e1;
-  color: var(--hbt-text);
-  box-shadow: var(--hbt-shadow-sm);
+  border-color: #0077B6 !important;
+  background-color: #0077B6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 10px rgba(0, 119, 182, 0.25) !important;
+}
+.hbt-filter-active:hover {
+  background-color: #00B4D8 !important;
+  border-color: #00B4D8 !important;
+  color: #ffffff !important;
 }
 
 .hbt-floor {

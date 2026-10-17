@@ -13,6 +13,16 @@ import AllPatients from './patients/AllPatients';
 import PatientHistory from './patients/PatientHistory';
 import PatientAnalytics from './patients/PatientAnalytics';
 import AllAppointments from './appointments/AllAppointments';
+import AdminRevenueSnapshot from './AdminRevenueSnapshot';
+import AdminOpdAnalytics from './AdminOpdAnalytics';
+import AdminActiveAdmissions from './AdminActiveAdmissions';
+import AdminIpdAnalytics from './AdminIpdAnalytics';
+import AdminBedOccupancyAnalytics from './AdminBedOccupancyAnalytics';
+import AdminAllBills from './AdminAllBills';
+import AdminRevenueAnalytics from './AdminRevenueAnalytics';
+import CriticalAlerts from './alerts/CriticalAlerts';
+import SystemNotifications from './alerts/SystemNotifications';
+import AbdmConsentManagement from './abdm/AbdmConsentManagement';
 
 const ComingSoon = ({ page }) => (
   <div className="p-8 flex items-center justify-center h-full">
@@ -29,9 +39,7 @@ export default function AdminRoutes() {
     <Routes>
       {/* Dashboard */}
       <Route index element={<AdminDashboard />} />
-      <Route path="daily-summary" element={<ComingSoon page="Daily Summary" />} />
-      <Route path="revenue-snapshot" element={<ComingSoon page="Revenue Snapshot" />} />
-      <Route path="bed-occupancy" element={<ComingSoon page="Bed Occupancy" />} />
+      <Route path="revenue-snapshot" element={<AdminRevenueSnapshot />} />
 
       {/* User & Access Control */}
       <Route path="users" element={<AllUsers />} />
@@ -54,14 +62,12 @@ export default function AdminRoutes() {
       <Route path="appointments/book" element={<ComingSoon page="Book Appointment" />} />
       <Route path="opd" element={<ComingSoon page="OPD Records" />} />
       <Route path="opd/queue" element={<ComingSoon page="Queue / Token Status" />} />
-      <Route path="opd/analytics" element={<ComingSoon page="OPD Analytics" />} />
+      <Route path="opd/analytics" element={<AdminOpdAnalytics />} />
 
       {/* IPD & Admission Control */}
-      <Route path="ipd" element={<ComingSoon page="Active Admissions" />} />
+      <Route path="ipd" element={<AdminActiveAdmissions />} />
       <Route path="ipd/admit" element={<ComingSoon page="Admit Patient" />} />
-      <Route path="ipd/transfers" element={<ComingSoon page="Transfers Tracking" />} />
-      <Route path="ipd/discharge" element={<ComingSoon page="Discharge Overview" />} />
-      <Route path="ipd/analytics" element={<ComingSoon page="IPD Analytics" />} />
+      <Route path="ipd/analytics" element={<AdminIpdAnalytics />} />
 
       {/* Bed & Resource Management */}
       <Route path="beds" element={<LiveBedTracker />} />
@@ -69,14 +75,11 @@ export default function AdminRoutes() {
 
       <Route path="lab/tests" element={<LabTests />} />
       {/* removed: allocate/deallocate */}
-      <Route path="beds/analytics" element={<ComingSoon page="Occupancy Analytics" />} />
+      <Route path="beds/analytics" element={<AdminBedOccupancyAnalytics />} />
 
       {/* Financial Management */}
-      <Route path="finance/bills" element={<ComingSoon page="All Bills" />} />
-      <Route path="finance/bills/generate" element={<ComingSoon page="Generate Bill" />} />
-      <Route path="finance/payments" element={<ComingSoon page="Payments" />} />
-      <Route path="finance/dues" element={<ComingSoon page="Pending Dues" />} />
-      <Route path="finance/analytics" element={<ComingSoon page="Revenue Analytics" />} />
+      <Route path="finance/bills" element={<AdminAllBills />} />
+      <Route path="finance/analytics" element={<AdminRevenueAnalytics />} />
 
       {/* Reports & Analytics */}
       <Route path="reports/revenue" element={<ComingSoon page="Revenue Reports" />} />
@@ -88,8 +91,9 @@ export default function AdminRoutes() {
 
       {/* Alerts & Notifications */}
       <Route path="alerts/pending" element={<ComingSoon page="Pending Actions" />} />
-      <Route path="alerts/critical" element={<ComingSoon page="Critical Alerts" />} />
-      <Route path="alerts/system" element={<ComingSoon page="System Notifications" />} />
+      <Route path="alerts/critical" element={<CriticalAlerts />} />
+      <Route path="alerts/system" element={<SystemNotifications />} />
+      <Route path="abdm/consents" element={<AbdmConsentManagement />} />
 
       {/* fallback */}
       <Route path="*" element={<ComingSoon page="Admin Module" />} />

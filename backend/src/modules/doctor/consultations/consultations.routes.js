@@ -21,7 +21,11 @@ router.post(
     body('followUpDate').optional().isString().isLength({ min: 1 }).withMessage('followUpDate must be a string date'),
     body('appointment_id').optional().isUUID().withMessage('appointment_id must be a valid uuid'),
     body('appointmentId').optional().isUUID().withMessage('appointmentId must be a valid uuid'),
-    body('disposition').optional().isIn(['NORMAL', 'REFER_ADMIT']).withMessage('disposition must be NORMAL or REFER_ADMIT'),
+    body('disposition').optional().isIn(['NORMAL', 'REFER_ADMIT', 'REFER_DEPT']).withMessage('disposition must be NORMAL, REFER_ADMIT or REFER_DEPT'),
+    body('referredDepartment').optional({ nullable: true }).isString(),
+    body('referred_department').optional({ nullable: true }).isString(),
+    body('referredDoctorId').optional({ nullable: true }).isUUID().withMessage('referredDoctorId must be a valid uuid'),
+    body('referred_doctor_id').optional({ nullable: true }).isUUID().withMessage('referred_doctor_id must be a valid uuid'),
   ],
   validateRequest,
   createConsultation

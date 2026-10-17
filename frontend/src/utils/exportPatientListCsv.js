@@ -69,7 +69,7 @@ export function downloadPatientListCsv(items, opts = {}) {
   const a = document.createElement('a');
   const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = opts.filename || `ht-hospital-patients-${stamp}.csv`;
+  a.download = opts.filename || `vyanx-patients-${stamp}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

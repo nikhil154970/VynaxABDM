@@ -272,7 +272,7 @@ export function buildInitialLama({ admission, patient, clearances, doctor, summa
     sigWitnessDate: '',
     followUpReportIf: 'fever, vomiting, pain, breathing difficulty or any emergency',
     followUpOn: '',
-    followUpAt: 'OPD — New H.T. Hospital',
+    followUpAt: 'OPD — MQE HIMS',
     followUpContact: safeText(p.mobile || ''),
   };
 }

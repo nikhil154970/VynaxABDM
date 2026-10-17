@@ -94,7 +94,7 @@ export default function PendingDues() {
 
                 <div className="flex gap-2">
                   <button className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:shadow-md"
-                    style={{ background: 'linear-gradient(135deg, #1d4ed8, #0d6ebd)' }}>
+                    style={{ backgroundColor: '#0077B6' }}>
                     <MdReceiptLong className="w-4 h-4" /> Collect Payment
                   </button>
                   <button className="px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition flex items-center gap-1.5">
@@ -116,3 +116,4 @@ export default function PendingDues() {
     </div>
   );
 }
+

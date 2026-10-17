@@ -12,7 +12,7 @@ export default function Tabs({ tabs = [], active = '', onChange }) {
             style={{
               background: isActive ? '#00AEEF' : '#FFFFFF',
               color: isActive ? '#FFFFFF' : '#111827',
-              borderColor: 'rgba(0,0,0,0.10)',
+              borderColor: '#d5d7eb',
             }}
           >
             {t.label}

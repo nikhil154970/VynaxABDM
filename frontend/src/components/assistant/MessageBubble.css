@@ -1,0 +1,193 @@
+/* =====================================================
+   MessageBubble.css - User & AI message bubbles (blue theme)
+   ===================================================== */
+
+.message-bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  animation: msg-in 0.22s ease both;
+  margin-bottom: 8px;
+}
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.message-bubble-row--user {
+  flex-direction: row-reverse;
+}
+
+.message-bubble-row--ai {
+  flex-direction: row;
+}
+
+/* Avatar column */
+.message-bubble__avatar {
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: 18px;
+}
+
+/* Content column */
+.message-bubble__content {
+  display: flex;
+  flex-direction: column;
+  max-width: min(82%, 420px);
+  gap: 6px;
+}
+
+.message-bubble-row--user .message-bubble__content {
+  align-items: flex-end;
+}
+
+/* Bubble */
+.message-bubble {
+  padding: 12px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+  position: relative;
+  word-break: break-word;
+  letter-spacing: -0.01em;
+}
+
+.message-bubble--user {
+  background: #0077B6;
+  color: #fff;
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.22);
+}
+
+.message-bubble--ai {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ap-text);
+  border-bottom-left-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+.message-bubble--ai strong {
+  color: var(--ap-text);
+  font-weight: 700;
+}
+
+/* Intent tag */
+.message-bubble__intent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ap-accent);
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: 999px;
+  padding: 4px 8px;
+  margin-bottom: 8px;
+  font-family: var(--ap-mono);
+}
+
+/* Text */
+.message-bubble__text {
+  white-space: pre-wrap;
+}
+
+/* Footer */
+.message-bubble__footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.message-bubble__footer--user {
+  flex-direction: row-reverse;
+}
+
+.message-bubble__time {
+  font-size: 11px;
+  color: var(--ap-text-dim);
+  font-family: var(--ap-mono);
+  letter-spacing: 0.02em;
+}
+
+.message-bubble__copy-btn,
+.message-bubble__speak-btn,
+.message-bubble__download-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ap-text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  padding: 0;
+}
+
+.message-bubble__copy-btn svg,
+.message-bubble__speak-btn svg,
+.message-bubble__download-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.message-bubble__copy-btn:hover,
+.message-bubble__speak-btn:hover,
+.message-bubble__download-btn:hover {
+  color: var(--ap-accent);
+  background: rgba(59, 130, 246, 0.06);
+  transform: translateY(-1px);
+}
+
+.message-bubble__speak-btn--active {
+  color: var(--ap-success);
+  background: rgba(16, 185, 129, 0.12);
+  animation: speak-pulse 1s ease-in-out infinite;
+}
+
+@keyframes speak-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
+}
+
+.message-bubble__download-btn {
+  color: #10b981;
+}
+.message-bubble__download-btn:hover {
+  color: #059669;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+/* Error banner */
+.message-bubble__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 242, 242, 0.95);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #991b1b;
+}
+
+.message-bubble__error-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.message-bubble__error-text {
+  word-break: break-word;
+}

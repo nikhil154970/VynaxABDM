@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { MdCheckCircle, MdRefresh, MdSearch } from 'react-icons/md';
 import api from '../../../utils/api';
+import { buildFormalReportFromSubmit, labReportApiToFormalReport, openLabReportPrintPlaceholder, writeFormalLabReportToWindow } from '../../../utils/formalLabReportPrint';
 import {
   applyCbcFormulas,
   applyCardiacProfileFormulas,
@@ -181,6 +183,27 @@ const HEMATOLOGY_TESTS = [
     rows: [
       { parameter: 'Malaria Parasite', result: '', unit: 'text', referenceRange: 'Negative' },
       { parameter: 'Microfilaria', result: '', unit: 'text', referenceRange: 'Negative' },
+    ],
+  },
+  {
+    name: 'DLC',
+    rows: [
+      { parameter: 'Neutrophils', result: '', unit: '%', referenceRange: '40-80' },
+      { parameter: 'Lymphocytes', result: '', unit: '%', referenceRange: '20-40' },
+      { parameter: 'Monocytes', result: '', unit: '%', referenceRange: '2-10' },
+      { parameter: 'Eosinophils', result: '', unit: '%', referenceRange: '1-6' },
+      { parameter: 'Basophils', result: '', unit: '%', referenceRange: '0-1' },
+    ],
+  },
+  { name: 'TLC', rows: [{ parameter: 'Total WBC Count', result: '', unit: 'cells/cumm', referenceRange: '4000-11000' }] },
+  { name: 'Reticulocyte Count', rows: [{ parameter: 'Reticulocyte Count', result: '', unit: '%', referenceRange: '0.5-2.5' }] },
+  {
+    name: 'Peripheral Smear',
+    rows: [
+      { parameter: 'RBC Morphology', result: '', unit: '-', referenceRange: 'Normocytic Normochromic' },
+      { parameter: 'WBC Morphology', result: '', unit: '-', referenceRange: 'Normal' },
+      { parameter: 'Platelets', result: '', unit: '-', referenceRange: 'Adequate' },
+      { parameter: 'Comment', result: '', unit: '-', referenceRange: '-' },
     ],
   },
 ];
@@ -792,6 +815,21 @@ const SEROLOGY_TESTS = [
       { parameter: 'Remarks', result: '', unit: '-', referenceRange: '-' },
     ],
   },
+  {
+    name: 'Paracheck',
+    rows: [
+      { parameter: 'P. Vivax', result: '', unit: '-', referenceRange: 'Negative' },
+      { parameter: 'P. Falciparum', result: '', unit: '-', referenceRange: 'Negative' },
+      { parameter: 'Result', result: '', unit: '-', referenceRange: 'Negative' },
+    ],
+  },
+  {
+    name: 'Mp Kit',
+    rows: [
+      { parameter: 'Malaria Parasite', result: '', unit: '-', referenceRange: 'Negative' },
+      { parameter: 'Species', result: '', unit: '-', referenceRange: 'Not Identified' },
+    ],
+  },
 ];
 
 const CLINICAL_PATHOLOGY_TEST_NAME_SET = new Set(CLINICAL_PATHOLOGY_TESTS.map((t) => normalizeText(t)));
@@ -945,6 +983,12 @@ function testsForDepartment(allTests, departmentLabel) {
     }
     return dept === target;
   });
+}
+
+function resultCategory(item, departmentLabel) {
+  const fromItem = String(item?.category || '').trim();
+  if (fromItem) return fromItem;
+  return String(departmentLabel || '').trim();
 }
 
 function collectOrderedPanelResults(orderedItems, catalogTests, rowsByTest, mapRow) {
@@ -2202,45 +2246,41 @@ function makeOrthopedicsRows(existingResults = []) {
 }
 
 function departmentName(test) {
-  if (isCbcName(test?.testName)) return 'Hematology';
   const testName = normalizeText(test?.testName);
   const category = String(test?.category || '').trim();
   const categoryNorm = normalizeText(category);
 
-  // Honor explicit department selected at billing side.
-  if (categoryNorm === 'autoimmune & collagen markers' || categoryNorm === 'autoimmune and collagen markers') {
-    return 'AUTOIMMUNE & COLLAGEN MARKERS';
+  // Priority 1: Use explicit category from backend (set by admin)
+  if (categoryNorm) {
+    if (categoryNorm === 'hematology') return 'Hematology';
+    if (categoryNorm === 'biochemistry') return 'Biochemistry';
+    if (categoryNorm === 'microbiology') return 'Microbiology';
+    if (categoryNorm === 'serology') return 'Serology';
+    if (categoryNorm === 'clinical pathology') return 'Clinical Pathology';
+    if (categoryNorm === 'hormone profile') return 'Hormone Profile';
+    if (categoryNorm === 'tumor marker') return 'Tumor Marker';
+    if (categoryNorm === 'autoimmune & collagen markers' || categoryNorm === 'autoimmune and collagen markers') return 'AUTOIMMUNE & COLLAGEN MARKERS';
+    if (categoryNorm === 'orthopedics / arthritis / collagen profile panel') return 'Orthopedics / Arthritis / Collagen Profile Panel';
+    if (categoryNorm === 'infectious disease markers') return 'Infectious Disease Markers';
+    if (categoryNorm === 'gastroenterology' || categoryNorm === 'hepatology' || categoryNorm === 'hepatology & gastroenterology') return category;
+    return category; // Unknown category — return as-is
   }
 
+  // Priority 2: Fallback — scan all catalogs by test name (when no category is set)
+  if (HEMATOLOGY_TESTS.some((item) => normalizeText(item.name) === testName)) return 'Hematology';
+  if (isCbcName(test?.testName)) return 'Hematology';
   if (BIOCHEMISTRY_TESTS.some((item) => normalizeText(item.name) === testName)) return 'Biochemistry';
   if (MICROBIOLOGY_TESTS.some((item) => microbiologyKey(item.name) === microbiologyKey(test?.testName))) return 'Microbiology';
   if (SEROLOGY_TESTS.some((item) => normalizeText(item.name) === testName)) return 'Serology';
-
   if (testName && INFECTIOUS_DISEASE_MARKERS_TESTS.some((t) => normalizeText(t.name) === testName)) return 'Infectious Disease Markers';
-
-  if (categoryNorm === 'gastroenterology' || categoryNorm === 'hepatology' || categoryNorm === 'hepatology & gastroenterology') {
-    return category;
-  }
-
-  if (categoryNorm === 'tumor marker') return 'Tumor Marker';
   if (testName && TUMOR_MARKER_TESTS.some((t) => normalizeText(t.name) === testName)) return 'Tumor Marker';
-
-  if (testName && AUTOIMMUNE_COLLAGEN_MARKERS_TESTS.some((t) => normalizeText(t.name) === testName)) {
-    return 'AUTOIMMUNE & COLLAGEN MARKERS';
-  }
-
-  if (testName && HEPATLOGY_GASTROENTEROLOGY_TESTS.some((t) => normalizeText(t.name) === testName)) {
-    return category || 'Gastroenterology';
-  }
-
+  if (testName && AUTOIMMUNE_COLLAGEN_MARKERS_TESTS.some((t) => normalizeText(t.name) === testName)) return 'AUTOIMMUNE & COLLAGEN MARKERS';
+  if (testName && HEPATLOGY_GASTROENTEROLOGY_TESTS.some((t) => normalizeText(t.name) === testName)) return 'Gastroenterology';
   if (CLINICAL_PATHOLOGY_TEST_NAME_SET.has(testName)) return 'Clinical Pathology';
-
-  if (testName && testName === normalizeText('Hormone Profile')) return 'Hormone Profile';
-
-  // Orthopedics / Arthritis / Collagen Profile Panel
+  if (testName && HORMONE_PROFILE_TESTS.some((t) => normalizeText(t.name) === testName)) return 'Hormone Profile';
   if (testName && ORTHOPEDICS_PANEL_TESTS.some((t) => normalizeText(t) === testName)) return 'Orthopedics / Arthritis / Collagen Profile Panel';
 
-  return String(test?.category || 'General').trim() || 'General';
+  return '';
 }
 
 
@@ -3051,11 +3091,14 @@ function DepartmentTestFilterSection({
 }
 
 export default function ResultEntryAuto() {
+  const location = useLocation();
+  const cloneOrderId = location.state?.cloneOrderId || '';
+  const editOrderId = location.state?.editOrderId || '';
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
   const [search, setSearch] = useState('');
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedId, setSelectedId] = useState(editOrderId || cloneOrderId);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [values, setValues] = useState({});
@@ -3088,7 +3131,76 @@ export default function ResultEntryAuto() {
 
 
 
+  const [manualEntries, setManualEntries] = useState([]);
+  const [doneTests, setDoneTests] = useState(new Set());
+  const [entryDepartment, setEntryDepartment] = useState('');
+  const [entryTestName, setEntryTestName] = useState('');
+  const [entryRows, setEntryRows] = useState([]);
+  const [loadedCustomParams, setLoadedCustomParams] = useState([]);
   const [activeDepartment, setActiveDepartment] = useState('');
+  const loadCustomParams = useCallback(async (dept, testName) => {
+    if (!dept || !testName) { setLoadedCustomParams([]); return; }
+    try {
+      const res = await api.get('/lab/custom-params', { params: { department: dept, testName } });
+      const items = Array.isArray(res?.data?.items) ? res.data.items : [];
+      setLoadedCustomParams(items);
+    } catch { setLoadedCustomParams([]); }
+  }, []);
+  // Merge loaded custom params into entryRows when they arrive
+  useEffect(() => {
+    if (!entryDepartment || !entryTestName || !loadedCustomParams.length) return;
+    setEntryRows((prev) => {
+      const existingParams = new Set(prev.map((r) => r.parameter));
+      const toAdd = loadedCustomParams.filter((p) => !existingParams.has(p.parameter));
+      if (!toAdd.length) return prev;
+      return [...prev, ...toAdd.map((p) => ({ parameter: p.parameter, result: '', unit: p.unit || '', referenceRange: p.referenceRange || '', _customId: p.id, _isCustom: true }))];
+    });
+  }, [loadedCustomParams, entryDepartment, entryTestName]);
+  const handleKeyNav = useCallback((e, row, col) => {
+    const key = e.key;
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(key)) return;
+    e.preventDefault();
+    const all = document.querySelectorAll('.entry-field');
+    const totalCols = 4;
+    let targetRow = row, targetCol = col;
+    if (key === 'ArrowRight' || key === 'Enter') {
+      if (col < totalCols - 1) { targetCol = col + 1; }
+      else { targetRow = row + 1; targetCol = 0; }
+    } else if (key === 'ArrowLeft') {
+      if (col > 0) { targetCol = col - 1; }
+      else { targetRow = row - 1; targetCol = totalCols - 1; }
+    } else if (key === 'ArrowDown') {
+      targetRow = row + 1;
+    } else if (key === 'ArrowUp') {
+      targetRow = row - 1;
+    }
+    if (targetRow < 0 || targetCol < 0) return;
+    for (const el of all) {
+      if (Number(el.dataset.row) === targetRow && Number(el.dataset.col) === targetCol) {
+        el.focus();
+        break;
+      }
+    }
+  }, []);
+  const isAutoParam = useCallback((paramName) => {
+    const tn = entryTestName;
+    if (!tn || !paramName) return false;
+    if (isCbcName(tn) && isCbcDerivedParameter(paramName)) return true;
+    if (isCoagulationProfilePanelTestName(tn) && isCoagulationProfileDerivedParameter(paramName)) return true;
+    if (isLftPanelTestName(tn) && isLftDerivedParameter(paramName)) return true;
+    if (isRftKftPanelTestName(tn) && isRftKftDerivedParameter(paramName)) return true;
+    if (isLipidProfilePanelTestName(tn) && isLipidProfileDerivedParameter(paramName)) return true;
+    if (isHbA1cPanelTestName(tn) && isHbA1cDerivedParameter(paramName)) return true;
+    if (isElectrolytePanelTestName(tn) && isElectrolyteDerivedParameter(paramName)) return true;
+    if (isIronProfilePanelTestName(tn) && isIronProfileDerivedParameter(paramName)) return true;
+    if (isCardiacProfilePanelTestName(tn) && isCardiacProfileDerivedParameter(paramName)) return true;
+    if (isBoneProfilePanelTestName(tn) && isBoneProfileDerivedParameter(paramName)) return true;
+    if (isInfectionInflammatoryProfilePanelTestName(tn) && isInfectionInflammatoryProfileDerivedParameter(paramName)) return true;
+    if (isArthritisProfilePanelTestName(tn) && isArthritisProfileDerivedParameter(paramName)) return true;
+    if (isFertilityHormonalProfilePanelTestName(tn) && isFertilityHormonalProfileDerivedParameter(paramName)) return true;
+    if ((isHormoneFt3TestName(tn) || isHormoneFt4TestName(tn)) && isHormoneFt3Ft4RatioParameter(paramName)) return true;
+    return false;
+  }, [entryTestName]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -3131,37 +3243,51 @@ export default function ResultEntryAuto() {
         init[`${key}_remarks`] = saved?.remarks || '';
       });
 
-      init.overallRemarks = order?.notes || '';
-      init.diagnosis = '';
-      init.verifiedBy = '';
-      init.approvedBy = '';
-      init.reportStatus = 'COMPLETED';
+      if (editOrderId) {
+        const parts = (order?.notes || '').split(' | ');
+        init.overallRemarks = parts[0] || '';
+        init.diagnosis = parts[1] || '';
+        init.verifiedBy = parts[2] || '';
+        init.approvedBy = parts[3] || '';
+        init.reportStatus = order?.reportStatus || 'COMPLETED';
+      } else {
+        init.overallRemarks = order?.notes || '';
+        init.diagnosis = '';
+        init.verifiedBy = '';
+        init.approvedBy = '';
+        init.reportStatus = 'COMPLETED';
+      }
 
       setDetail(order);
       setValues(init);
-      setCbcRows(makeCbcRows(savedResults));
-      setHematologyRowsByTest(makeHematologyRows(savedResults));
-      setBiochemistryRowsByTest(makeBiochemistryRows(savedResults));
-      setMicrobiologyRowsByTest(makeMicrobiologyRows(savedResults));
-      setMicrobiologyRemarksByTest({});
-      setSerologyRowsByTest(makeSerologyRows(savedResults));
-      setSerologyRemarksByTest({});
-      setClinicalPathologyRowsByTest(makeClinicalPathologyRows(savedResults));
-      setHematologyFilter('');
-      setBiochemistryFilter('');
-      setMicrobiologyFilter('');
-      setMicrobiologyRemarksByTest({});
-      setSerologyFilter('');
-      setSerologyRemarksByTest({});
-      setClinicalPathologyFilter('');
-      setHormoneProfileFilter('');
-      setHormoneProfileRowsByTest({});
-      setHepatologyGastroRowsByTest(makeHepatologyGastroRows(savedResults, tests));
-      setHepatologyGastroFilter('');
-      setInfectiousDiseaseRowsByTest(makeInfectiousDiseaseRows(savedResults));
-      setInfectiousDiseaseFilter('');
-      setOrthopedicsRowsByTest(makeOrthopedicsRows(savedResults));
-      setOrthopedicsFilter('');
+      setLoadedCustomParams([]);
+      setEntryDepartment('');
+      setEntryTestName('');
+      setEntryRows([]);
+
+      // Edit → preload the saved results so they can be corrected in place.
+      // New Test (clone) → start with an empty form; the entry becomes a brand-new
+      // order containing ONLY the freshly entered tests (old report stays untouched).
+      if (editOrderId && savedResults.length) {
+        const grouped = {};
+        for (const r of savedResults) {
+          const groupKey = r.remarks || r.category || 'Other';
+          if (!grouped[groupKey]) {
+            grouped[groupKey] = { department: r.category || 'Other', testName: r.remarks || groupKey, rows: [] };
+          }
+          grouped[groupKey].rows.push({
+            parameter: r.testName || '',
+            result: r.value || '',
+            unit: r.unit || '',
+            referenceRange: r.referenceRange || '',
+          });
+        }
+        setManualEntries(Object.values(grouped));
+        setDoneTests(new Set(Object.keys(grouped)));
+      } else {
+        setManualEntries([]);
+        setDoneTests(new Set());
+      }
 
       // Tumor Marker
       setTumorMarkerRowsByTest(makeTumorMarkerRows(savedResults));
@@ -3187,7 +3313,12 @@ export default function ResultEntryAuto() {
   useEffect(() => {
     if (!selectedId) {
       setDetail(null);
-      setActiveDepartment('');
+      setManualEntries([]);
+      setDoneTests(new Set());
+      setLoadedCustomParams([]);
+      setEntryDepartment('');
+      setEntryTestName('');
+      setEntryRows([]);
       setHematologyFilter('');
       setBiochemistryFilter('');
       setMicrobiologyFilter('');
@@ -3886,243 +4017,107 @@ export default function ResultEntryAuto() {
 
   const submit = async () => {
     if (!detail?.id) return;
+    const submitRemarks = values.overallRemarks || '';
+    const submitDiagnosis = values.diagnosis || '';
     setSaving(true);
     setMessage('');
     setError('');
     try {
-      const orderTests = Array.isArray(detail?.items) ? detail.items : [];
-
-      const hematologyResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Hematology'),
-        HEMATOLOGY_TESTS,
-        hematologyRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(row.parameter || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: filterKey,
-        }),
-      );
-
-      const biochemistryResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Biochemistry'),
-        BIOCHEMISTRY_TESTS,
-        biochemistryRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(row.parameter || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: filterKey,
-        }),
-      );
-
-      const microbiologyResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Microbiology'),
-        MICROBIOLOGY_TESTS,
-        microbiologyRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(row.parameter || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: microbiologyRemarksByTest[filterKey] || '',
-          group: filterKey,
-        }),
-      );
-
-      const serologyResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Serology'),
-        SEROLOGY_TESTS,
-        serologyRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(row.parameter || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: serologyRemarksByTest[filterKey] || '',
-          group: filterKey,
-        }),
-      );
-
-      const clinicalPathologyResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Clinical Pathology'),
-        CLINICAL_PATHOLOGY_TESTS.map((name) => ({ name })),
-        clinicalPathologyRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(row.parameter || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: filterKey,
-        }),
-      );
-
-      const hormoneProfileResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Hormone Profile'),
-        HORMONE_PROFILE_FIRST_5_TESTS,
-        hormoneProfileRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(row.parameter || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: filterKey,
-        }),
-      );
-
-      const tumorMarkerResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Tumor Marker'),
-        TUMOR_MARKER_TESTS,
-        tumorMarkerRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(filterKey || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: '',
-        }),
-      );
-
-      const orthopedicsResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Orthopedics / Arthritis / Collagen Profile Panel'),
-        ORTHOPEDICS_PANEL_TESTS.map((name) => ({ name })),
-        orthopedicsRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(filterKey || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: String(row.result || '').trim(),
-        }),
-      );
-
-      const infectiousDiseaseResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Infectious Disease Markers'),
-        INFECTIOUS_DISEASE_MARKERS_TESTS,
-        infectiousDiseaseRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(filterKey || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: String(row.result || '').trim(),
-        }),
-      );
-
-      const hepatologyGastroResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'Hepatology & Gastroenterology'),
-        HEPATLOGY_GASTROENTEROLOGY_TESTS,
-        hepatologyGastroRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(filterKey || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: String(row.result || '').trim(),
-        }),
-      );
-
-      const autoimmuneCollagenResults = collectOrderedPanelResults(
-        testsForDepartment(orderTests, 'AUTOIMMUNE & COLLAGEN MARKERS'),
-        AUTOIMMUNE_COLLAGEN_MARKERS_TESTS,
-        autoimmuneCollagenRowsByTest,
-        ({ filterKey, row }) => ({
-          testName: String(row.parameter || '').trim(),
-          value: String(row.result || '').trim(),
-          unit: String(row.unit || '').trim(),
-          referenceRange: String(row.referenceRange || '').trim(),
-          remarks: String(filterKey || '').trim(),
-        }),
-      );
-
-      const orthopedicsOtherResults = orderTests
-
-        .filter((test) => {
-          const dept = normalizeText(departmentName(test));
-          return (
-            dept !== 'hematology' &&
-            dept !== 'biochemistry' &&
-            dept !== 'microbiology' &&
-            dept !== 'serology' &&
-            dept !== 'clinical pathology' &&
-            dept !== 'orthopedics / arthritis / collagen profile panel' &&
-            dept !== 'infectious disease markers' &&
-            dept !== 'hepatology & gastroenterology' &&
-            dept !== 'gastroenterology' &&
-            dept !== 'hepatology' &&
-            dept !== 'tumor marker' &&
-            dept !== 'autoimmune & collagen markers'
-          );
-        })
-        .map((test) => {
-          const key = `t_${test.id || resultKey(test.testName)}`;
-          return {
-            testName: String(values[`${key}_name`] || test.testName || '').trim(),
-            value: String(values[`${key}_value`] || '').trim(),
-            unit: String(values[`${key}_unit`] || test.unit || '').trim(),
-            referenceRange: String(values[`${key}_referenceRange`] || test.referenceRange || '').trim(),
-            remarks: String(values[`${key}_remarks`] || '').trim(),
-          };
-        });
-
-      const results = [
-        ...hematologyResults,
-        ...biochemistryResults,
-        ...microbiologyResults,
-        ...serologyResults,
-        ...clinicalPathologyResults,
-        ...hormoneProfileResults,
-        ...tumorMarkerResults,
-        ...orthopedicsResults,
-        ...infectiousDiseaseResults,
-        ...hepatologyGastroResults,
-        ...autoimmuneCollagenResults,
-        ...orthopedicsOtherResults,
-      ];
-
-
-
-
-      const missing = results.find((result) => !result.testName || !String(result.value || '').trim());
-
-      if (!results.length) {
-        setError('Please fill at least one test result in the department table before submitting.');
+      if (!manualEntries.length) {
+        setError('Please add at least one result entry before submitting.');
         return;
       }
 
+      const results = [];
+      for (const entry of manualEntries) {
+        for (const row of entry.rows) {
+          const val = String(row.result || '').trim();
+          if (!val) continue;
+          results.push({
+            testName: String(row.parameter || '').trim(),
+            value: val,
+            unit: String(row.unit || '').trim(),
+            referenceRange: String(row.referenceRange || '').trim(),
+            category: entry.department,
+            remarks: entry.testName,
+          });
+        }
+      }
+
+      // Deduplicate results before sending
+      const seen = new Set();
+      const deduped = [];
+      for (const r of results) {
+        const key = `${r.testName}\x00${r.value}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(r);
+      }
+      results.splice(0, results.length, ...deduped);
+
+      const missing = results.find((result) => !result.value);
       if (missing) {
         setError(`Result required for: ${missing.testName || 'selected test'}`);
         return;
       }
 
-      await api.post(`/lab/orders/${encodeURIComponent(detail.id)}/results`, {
+      const printWin = openLabReportPrintPlaceholder();
+
+      // "New Test" (clone) → create a brand-new order for this patient so the previous
+      // report is preserved. A normal entry saves to the order that is open.
+      let targetOrderId = detail.id;
+      if (cloneOrderId) {
+        const repeatRes = await api.post(`/lab/orders/${encodeURIComponent(detail.id)}/repeat`);
+        const newId = repeatRes?.data?.order?.id;
+        if (!newId) throw new Error('Could not start a new test for this patient.');
+        targetOrderId = newId;
+      }
+
+      await api.post(`/lab/orders/${encodeURIComponent(targetOrderId)}/results`, {
         results,
-        overallRemarks: values.overallRemarks || '',
-        diagnosis: values.diagnosis || '',
+        overallRemarks: submitRemarks,
+        diagnosis: submitDiagnosis,
         verifiedBy: values.verifiedBy || '',
         approvedBy: values.approvedBy || '',
         reportStatus: values.reportStatus || 'COMPLETED',
       });
 
-      setMessage('Results submitted successfully.');
+      const localFormal = buildFormalReportFromSubmit({
+        detail,
+        patient,
+        results,
+        overallRemarks: submitRemarks,
+        diagnosis: submitDiagnosis,
+      });
+
+      let formal = localFormal;
+      try {
+        const reportRes = await api.get(`/lab/reports/${encodeURIComponent(targetOrderId)}`);
+        if (reportRes?.data) {
+          const fromApi = labReportApiToFormalReport(reportRes.data);
+          formal = {
+            ...fromApi,
+            overallRemarks: submitRemarks || fromApi.overallRemarks,
+            diagnosis: submitDiagnosis || fromApi.diagnosis,
+            results: fromApi.results?.length ? fromApi.results : localFormal.results,
+          };
+        }
+      } catch {
+        // API fetch optional — print from submitted results
+      }
+
+      writeFormalLabReportToWindow(printWin, [formal], { autoPrint: true });
+
+      setMessage('Results submitted successfully. Print window opened (allow popups if blocked).');
       setSelectedId('');
       setDetail(null);
       setSearch('');
       setActiveDepartment('');
-      setHematologyFilter('');
-      setBiochemistryFilter('');
-      setMicrobiologyFilter('');
-      setSerologyFilter('');
-      setMicrobiologyRemarksByTest({});
-      setSerologyRemarksByTest({});
-      setClinicalPathologyFilter('');
-      setHepatologyGastroFilter('');
-      setInfectiousDiseaseFilter('');
-      setOrthopedicsFilter('');
-      setTumorMarkerFilter('');
-      setAutoimmuneCollagenFilter('');
+      setManualEntries([]);
+      setLoadedCustomParams([]);
+      setEntryDepartment('');
+      setEntryTestName('');
+      setEntryRows([]);
       await load();
 
     } catch (e) {
@@ -4221,339 +4216,226 @@ export default function ResultEntryAuto() {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-              <p className="text-xs font-extrabold uppercase tracking-wide text-gray-600">Departments</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {departments.length ? (
-                  departments.map((department) => (
-                    <button
-                      key={department}
-                      type="button"
-                      onClick={() => setActiveDepartment(department)}
-                      className={`rounded-full border px-4 py-2 text-xs font-extrabold transition ${
-                        visibleDepartment === department
-                          ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
-                          : 'border-blue-100 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
-                      }`}
-                    >
-                      {department}
-                    </button>
-                  ))
-                ) : (
-                  <span className="text-sm font-semibold text-gray-500">No department found.</span>
-                )}
-              </div>
+              <p className="text-xs font-extrabold uppercase tracking-wide text-gray-600 mb-3">Ordered Tests from Reception</p>
+              {tests.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {tests.map((test, idx) => {
+                    const testKey = test.id || test.testName;
+                    const done = doneTests.has(testKey);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          const dept = departmentName(test);
+                          if (!dept) return;
+                          setEntryDepartment(dept);
+                          setEntryTestName(test.testName);
+                          loadCustomParams(dept, test.testName);
+                          const catalog = getDepartmentCatalog(dept);
+                          const match = findCatalogTestName(test.testName, catalog);
+                          if (match) {
+                            const rows = getCatalogTestTemplateRows(match, catalog);
+                            setEntryRows(rows);
+                          } else {
+                            setEntryRows([]);
+                          }
+                        }}
+                        className={`inline-flex items-center rounded-xl border px-3 py-1.5 text-sm font-bold transition ${
+                          done
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-blue-100 bg-blue-50 text-blue-800 hover:bg-blue-100'
+                        }`}
+                      >
+                        {test.testName}
+                        {done ? <span className="ml-1.5 text-emerald-500">&#10003;</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm font-semibold text-gray-500">No tests found in this order.</p>
+              )}
+            </div>
 
-              <div className="mt-4">
-                <div className="max-w-sm">
-                
-                  <select
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-extrabold text-gray-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                    value={visibleDepartment}
-                    onChange={(e) => setActiveDepartment(e.target.value)}
-                  >
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+              <p className="text-xs font-extrabold uppercase tracking-wide text-gray-600 mb-3">Enter Results</p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-[180px]">
+                  <label className="block text-[11px] font-extrabold text-gray-600 mb-1.5">Department</label>
+                  <select className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-200 w-full" value={entryDepartment} onChange={(e) => { setEntryDepartment(e.target.value); setEntryTestName(''); setEntryRows([]); }}>
+                    <option value="">Select</option>
                     {ALL_DEPARTMENTS.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
+                      <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
                 </div>
+                <div className="min-w-[220px] flex-1">
+                  <label className="block text-[11px] font-extrabold text-gray-600 mb-1.5">Test Name</label>
+                  <select className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-200 w-full" value={entryTestName} onChange={(e) => {
+                    const name = e.target.value;
+                    setEntryTestName(name);
+                    loadCustomParams(entryDepartment, name);
+                    if (name && entryDepartment) {
+                      const catalog = getDepartmentCatalog(entryDepartment);
+                      const match = findCatalogTestName(name, catalog);
+                      if (match) {
+                        const rows = getCatalogTestTemplateRows(match, catalog);
+                        setEntryRows(rows);
+                      } else {
+                        setEntryRows([]);
+                      }
+                    } else {
+                      setEntryRows([]);
+                    }
+                  }} disabled={!entryDepartment}>
+                    <option value="">{entryDepartment ? 'Select test' : 'Select department first'}</option>
+                    {(entryDepartment ? getDepartmentCatalog(entryDepartment) : []).map((t) => (
+                      <option key={t.name} value={t.name}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!entryDepartment || !entryTestName || !entryRows.length) return;
+                    const hasResult = entryRows.some((r) => String(r.result || '').trim());
+                    if (!hasResult) return;
+                    setManualEntries((prev) => [
+                      ...prev,
+                      {
+                        department: entryDepartment,
+                        testName: entryTestName,
+                        rows: entryRows
+                          .filter((r) => String(r?.result ?? '').trim())
+                          .map((r) => ({ ...r })),
+                      },
+                    ]);
+                    const catalog = getDepartmentCatalog(entryDepartment);
+                    const match = findCatalogTestName(entryTestName, catalog);
+                    const catalogRows = match ? getCatalogTestTemplateRows(match, catalog) : [];
+                    // Save new custom rows (beyond catalog) to API
+                    const newCustomRows = entryRows.filter((r, idx) => {
+                      if (idx < catalogRows.length) return false;
+                      return r.parameter && r.parameter.trim();
+                    });
+                    for (const cr of newCustomRows) {
+                      api.post('/lab/custom-params', { department: entryDepartment, testName: entryTestName, parameter: cr.parameter, unit: cr.unit || '', referenceRange: cr.referenceRange || '' }).catch(() => {});
+                    }
+                    // Mark test done and clear entry form
+                    setDoneTests((prev) => new Set([...prev, entryTestName]));
+                    setEntryDepartment('');
+                    setEntryTestName('');
+                    setEntryRows([]);
+                    setLoadedCustomParams([]);
+                  }}
+                  className="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                  disabled={!entryDepartment || !entryTestName || !entryRows.length || !entryRows.some((r) => String(r.result || '').trim())}
+                >
+                  Save Test
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEntryRows((prev) => [...prev, { parameter: '', result: '', unit: '', referenceRange: '', _isCustom: true }])}
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-extrabold text-gray-700 hover:bg-gray-50"
+                >
+                  Add Row
+                </button>
               </div>
-            </div>
-
-            {visibleDepartment ? (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-                {advisedDepartmentTests.length ? (
-                  <div className="mb-4 rounded-2xl border border-gray-100 bg-slate-50/70 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[11px] font-extrabold uppercase tracking-wide text-gray-600">Reception tests</p>
-                      <p className="text-[11px] font-extrabold text-gray-500">
-                        {advisedDepartmentTests.filter((t) => isDepartmentTestDone(t)).length}/{advisedDepartmentTests.length}
-                      </p>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {advisedDepartmentTests.map((name) => {
-                        const active = isSameTestName(name, departmentFilterState.filter);
-                        const done = isDepartmentTestDone(name);
-                        return (
-                          <button
-                            key={name}
-                            type="button"
-                            onClick={() => goToDepartmentTest(name)}
-                            className={`rounded-full border px-3 py-2 text-xs font-extrabold transition ${
-                              active
-                                ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
-                                : done
-                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                                  : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
-                            }`}
-                            title={name}
-                          >
-                            <span className="max-w-[220px] inline-block truncate align-middle">{name}</span>
-                            <span className={`ml-2 align-middle text-[10px] ${active ? 'text-white/90' : done ? 'text-emerald-700' : 'text-gray-400'}`}>
-                              {done ? 'DONE' : 'PENDING'}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={goPrevDeptTest}
-                        disabled={advisedDepartmentTests.length < 2}
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-                      >
-                        Prev
-                      </button>
-                      <button
-                        type="button"
-                        onClick={goNextDeptTest}
-                        disabled={advisedDepartmentTests.length < 2}
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {isHematologyActive ? (
-                  <DepartmentTestFilterSection
-                    title="Hematology"
-                    tests={departmentFilterDropdownTests}
-                    filter={hematologyFilter}
-                    onFilterChange={setHematologyFilter}
-                    rows={selectedHematologyRows}
-                    onRowChange={setHematologyVal}
-                    onAddRow={addHematologyRow}
-                    receptionAdvisedTests={advisedDepartmentTests}
-                    isAutoCalculatedRow={(row) => {
-                      const filterKey = findCatalogTestName(hematologyFilter, HEMATOLOGY_TESTS);
-                      return (
-                        (isCbcName(filterKey) && isCbcDerivedParameter(row?.parameter)) ||
-                        (isCoagulationProfilePanelTestName(filterKey) &&
-                          isCoagulationProfileDerivedParameter(row?.parameter))
-                      );
-                    }}
-                  />
-                ) : null}
-
-                {isBiochemistryActive ? (
-                  <DepartmentTestFilterSection
-                    title="Biochemistry"
-                    tests={departmentFilterDropdownTests}
-                    filter={biochemistryFilter}
-                    onFilterChange={setBiochemistryFilter}
-                    rows={selectedBiochemistryRows}
-                    onRowChange={setBiochemistryVal}
-                    onAddRow={addBiochemistryRow}
-                    receptionAdvisedTests={advisedDepartmentTests}
-                    isAutoCalculatedRow={(row) => {
-                      const filterKey = findCatalogTestName(biochemistryFilter, BIOCHEMISTRY_TESTS);
-                      return (
-                        (isLftPanelTestName(filterKey) && isLftDerivedParameter(row?.parameter)) ||
-                        (isRftKftPanelTestName(filterKey) && isRftKftDerivedParameter(row?.parameter)) ||
-                        (isLipidProfilePanelTestName(filterKey) && isLipidProfileDerivedParameter(row?.parameter)) ||
-                        (isHbA1cPanelTestName(filterKey) && isHbA1cDerivedParameter(row?.parameter)) ||
-                        (isElectrolytePanelTestName(filterKey) && isElectrolyteDerivedParameter(row?.parameter)) ||
-                        (isIronProfilePanelTestName(filterKey) && isIronProfileDerivedParameter(row?.parameter)) ||
-                        (isCardiacProfilePanelTestName(filterKey) && isCardiacProfileDerivedParameter(row?.parameter)) ||
-                        (isBoneProfilePanelTestName(filterKey) && isBoneProfileDerivedParameter(row?.parameter)) ||
-                        (isInfectionInflammatoryProfilePanelTestName(filterKey) &&
-                          isInfectionInflammatoryProfileDerivedParameter(row?.parameter))
-                      );
-                    }}
-                  />
-                ) : null}
-
-                {isMicrobiologyActive ? (
-                  <DepartmentTestFilterSection
-                    title="Microbiology"
-                    tests={departmentFilterDropdownTests}
-                    filter={microbiologyFilter}
-                    onFilterChange={setMicrobiologyFilter}
-                    rows={selectedMicrobiologyRows}
-                    onRowChange={setMicrobiologyVal}
-                    onAddRow={addMicrobiologyRow}
-                    receptionAdvisedTests={advisedDepartmentTests}
-                    placeholder="Select microbiology test"
-                    parameterReadOnly={false}
-                    remarks={selectedMicrobiologyRemarks}
-                    onRemarksChange={setMicrobiologyRemarks}
-                  />
-                ) : null}
-
-                {isSerologyActive ? (
-                  <DepartmentTestFilterSection
-                    title="Serology"
-                    tests={serologyDropdownTests}
-                    filter={serologyFilter}
-                    onFilterChange={setSerologyFilter}
-                    rows={selectedSerologyRows}
-                    onRowChange={setSerologyVal}
-                    onAddRow={addSerologyRow}
-                    receptionAdvisedTests={advisedDepartmentTests}
-                    placeholder="Select serology test"
-                    parameterReadOnly={false}
-                    remarks={selectedSerologyRemarks}
-                    onRemarksChange={setSerologyRemarks}
-                  />
-                ) : null}
-
-                {isClinicalPathologyActive ? (
-                  <DepartmentTestFilterSection
-                    title="Clinical Pathology"
-                    tests={departmentFilterDropdownTests}
-                    filter={clinicalPathologyFilter}
-                    onFilterChange={setClinicalPathologyFilter}
-                    rows={selectedClinicalPathologyRows}
-                    onRowChange={setClinicalPathologyVal}
-                    onAddRow={addClinicalPathologyRow}
-                    receptionAdvisedTests={advisedDepartmentTests}
-                  />
-                ) : null}
-
-                {isHormoneProfileActive ? (
-                  <HormoneProfileSection
-                    filter={hormoneProfileFilter}
-                    onFilterChange={setHormoneProfileFilter}
-                    rowsByTest={hormoneProfileRowsByTest}
-                    onRowChange={setHormoneProfileVal}
-                  />
-                ) : null}
-
-                {isHepatologyGastroActive ? (
-                  <div className="space-y-3">
-                    <DepartmentTestFilterSection
-                      title={visibleDepartment || 'Gastroenterology'}
-                      tests={departmentFilterDropdownTests}
-                      filter={hepatologyGastroFilter}
-                      onFilterChange={(value) => setHepatologyGastroFilter(String(value || '').trim())}
-                      rows={selectedHepatologyGastroRows}
-                      onRowChange={setHepatologyGastroVal}
-                      onAddRow={addHepatologyGastroRow}
-                      receptionAdvisedTests={advisedDepartmentTests}
-                    />
-
-                    <div className="text-[11px] font-extrabold text-gray-600">
-                      Dropdown total: {departmentFilterDropdownTests?.length || 0} (expected 25)
-                    </div>
-
-
-                  </div>
-                ) : null}
-
-                {isTumorMarkerActive ? (
-                  <div className="space-y-3">
-                    <DepartmentTestFilterSection
-                      title="Tumor Marker"
-                      tests={departmentFilterDropdownTests}
-                      filter={tumorMarkerFilter}
-                      onFilterChange={(value) => setTumorMarkerFilter(String(value || '').trim())}
-                      rows={selectedTumorMarkerRows}
-                      onRowChange={setTumorMarkerVal}
-                      onAddRow={addTumorMarkerRow}
-                      receptionAdvisedTests={advisedDepartmentTests}
-                    />
-
-                    <div className="text-[11px] font-extrabold text-gray-600">
-                      Dropdown total: {TUMOR_MARKER_TESTS?.length || 0} (expected 21)
-                    </div>
-                  </div>
-                ) : null}
-
-
-                {isInfectiousDiseaseActive ? (
-                  <DepartmentTestFilterSection
-                    title="Infectious Disease Markers"
-                    tests={departmentFilterDropdownTests}
-                    filter={infectiousDiseaseFilter}
-                    onFilterChange={setInfectiousDiseaseFilter}
-                    rows={selectedInfectiousDiseaseRows}
-                    onRowChange={setInfectiousDiseaseVal}
-                    onAddRow={addInfectiousDiseaseRow}
-                    receptionAdvisedTests={advisedDepartmentTests}
-                  />
-                ) : null}
-
-                {isAutoimmuneCollagenActive ? (
-                  <DepartmentTestFilterSection
-                    title="AUTOIMMUNE & COLLAGEN MARKERS"
-                    tests={departmentFilterDropdownTests}
-                    filter={autoimmuneCollagenFilter}
-                    onFilterChange={(value) => setAutoimmuneCollagenFilter(String(value || '').trim())}
-                    rows={selectedAutoimmuneCollagenRows}
-                    onRowChange={setAutoimmuneCollagenVal}
-                    onAddRow={addAutoimmuneCollagenRow}
-                    receptionAdvisedTests={advisedDepartmentTests}
-                  />
-                ) : null}
-
-                {isOrthopedicsActive ? (
-                  <DepartmentTestFilterSection
-                    title="Orthopedics"
-                    tests={departmentFilterDropdownTests}
-                    filter={orthopedicsFilter}
-                    onFilterChange={setOrthopedicsFilter}
-                    rows={selectedOrthopedicsRows}
-                    onRowChange={setOrthopedicsVal}
-                    onAddRow={addOrthopedicsRow}
-                    isAutoCalculatedRow={(row) => isArthritisProfileDerivedParameter(row?.parameter)}
-                    receptionAdvisedTests={advisedDepartmentTests}
-                  />
-                ) : null}
-
-                {!isHematologyActive &&
-                !isBiochemistryActive &&
-                !isMicrobiologyActive &&
-                !isSerologyActive &&
-                !isClinicalPathologyActive &&
-                !isHormoneProfileActive &&
-                !isHepatologyGastroActive &&
-                !isTumorMarkerActive &&
-                !isInfectiousDiseaseActive &&
-                !isAutoimmuneCollagenActive &&
-                !isOrthopedicsActive &&
-                visibleOtherTests.length ? (
-                  <div className={visibleCbcTest ? 'mt-4 overflow-auto rounded-xl border border-gray-100' : 'overflow-auto rounded-xl border border-gray-100'}>
-                    <table className="w-full min-w-[760px] border-separate border-spacing-0 text-sm">
-                      <thead>
-                        <tr className="bg-slate-50">
-                          <th className="border-b border-gray-100 px-3 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Parameter</th>
-                          <th className="border-b border-gray-100 px-3 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Result</th>
-                          <th className="border-b border-gray-100 px-3 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Unit</th>
-                          <th className="border-b border-gray-100 px-3 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Range</th>
+              {entryRows.length ? (
+                <div className="mt-3 overflow-auto rounded-xl border border-gray-100">
+                  <table className="w-full border-separate border-spacing-0 text-sm">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="border-b border-gray-100 px-3 py-2.5 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Parameter</th>
+                        <th className="border-b border-gray-100 px-3 py-2.5 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Result</th>
+                        <th className="border-b border-gray-100 px-3 py-2.5 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Unit</th>
+                        <th className="border-b border-gray-100 px-3 py-2.5 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Range</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entryRows.map((row, idx) => (
+                        <tr key={idx}>
+                          <td className="border-b border-gray-50 px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <input className="entry-field w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-bold text-gray-800 outline-none" data-row={idx} data-col="0" value={row.parameter} onChange={(e) => setEntryRows((prev) => prev.map((r, i) => i === idx ? { ...r, parameter: e.target.value } : r))} onKeyDown={(e) => handleKeyNav(e, idx, 0)} />
+                              {isAutoParam(row.parameter) ? (
+                                <span className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-extrabold text-blue-700">Auto</span>
+                              ) : null}
+                              {row._isCustom ? row._customId ? (
+                                <button type="button" onClick={async () => {
+                                  try { await api.delete(`/lab/custom-params/${row._customId}`); } catch {}
+                                  setEntryRows((prev) => prev.filter((_, i) => i !== idx));
+                                  setLoadedCustomParams((prev) => prev.filter((p) => p.id !== row._customId));
+                                }} className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-extrabold text-red-700 hover:bg-red-100">Delete</button>
+                              ) : (
+                                <>
+                                  <button type="button" onClick={async () => {
+                                    try {
+                                      const res = await api.post('/lab/custom-params', { department: entryDepartment, testName: entryTestName, parameter: row.parameter, unit: row.unit || '', referenceRange: row.referenceRange || '' });
+                                      const id = res?.data?.id;
+                                      if (id) {
+                                        setEntryRows((prev) => prev.map((r, i) => i === idx ? { ...r, _customId: id, _isCustom: true } : r));
+                                        setLoadedCustomParams((prev) => [...prev, { id, department: entryDepartment, testName: entryTestName, parameter: row.parameter, unit: row.unit || '', referenceRange: row.referenceRange || '' }]);
+                                      }
+                                    } catch {}
+                                  }} className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-extrabold text-emerald-700 hover:bg-emerald-100">Save</button>
+                                  <button type="button" onClick={() => setEntryRows((prev) => prev.filter((_, i) => i !== idx))} className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-extrabold text-gray-600 hover:bg-gray-100">Remove</button>
+                                </>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="border-b border-gray-50 px-3 py-2">
+                            <input className="entry-field w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-200" data-row={idx} data-col="1" value={row.result} placeholder={isAutoParam(row.parameter) ? 'Auto-calculated' : 'Enter result'} onKeyDown={(e) => handleKeyNav(e, idx, 1)} onChange={(e) => { const v = e.target.value; setEntryRows((prev) => {
+                              const next = prev.map((r, i) => i === idx ? { ...r, result: v } : r);
+                              const tn = entryTestName;
+                              if (isCbcName(tn)) return applyCbcFormulas(next);
+                              if (isLftPanelTestName(tn)) return applyLftFormulas(next);
+                              if (isRftKftPanelTestName(tn)) return applyRftKftFormulas(next, { age: patient?.age, gender: patient?.gender });
+                              if (isLipidProfilePanelTestName(tn)) return applyLipidProfileFormulas(next);
+                              if (isHbA1cPanelTestName(tn)) return applyHbA1cFormulas(next);
+                              if (isElectrolytePanelTestName(tn)) return applyElectrolyteFormulas(next);
+                              if (isIronProfilePanelTestName(tn)) return applyIronProfileFormulas(next);
+                              if (isCardiacProfilePanelTestName(tn)) return applyCardiacProfileFormulas(next);
+                              if (isBoneProfilePanelTestName(tn)) return applyBoneProfileFormulas(next);
+                              if (isInfectionInflammatoryProfilePanelTestName(tn)) return applyInfectionInflammatoryProfileFormulas(next);
+                              if (isCoagulationProfilePanelTestName(tn)) return applyCoagulationProfileFormulas(next);
+                              if (isArthritisProfilePanelTestName(tn)) return applyArthritisProfileFormulas(next);
+                              if (isFertilityHormonalProfilePanelTestName(tn)) return applyFertilityHormonalProfileFormulas(next);
+                              return next;
+                            }); }} />
+                          </td>
+                          <td className="border-b border-gray-50 px-3 py-2">
+                            <input className="entry-field w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600 outline-none" data-row={idx} data-col="2" value={row.unit} onChange={(e) => setEntryRows((prev) => prev.map((r, i) => i === idx ? { ...r, unit: e.target.value } : r))} onKeyDown={(e) => handleKeyNav(e, idx, 2)} />
+                          </td>
+                          <td className="border-b border-gray-50 px-3 py-2">
+                            <input className="entry-field w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600 outline-none" data-row={idx} data-col="3" value={row.referenceRange} onChange={(e) => setEntryRows((prev) => prev.map((r, i) => i === idx ? { ...r, referenceRange: e.target.value } : r))} onKeyDown={(e) => handleKeyNav(e, idx, 3)} />
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {visibleOtherTests.map((test) => {
-                          const key = `t_${test.id || resultKey(test.testName)}`;
-                          return (
-                            <tr key={test.id}>
-                              <td className="border-b border-gray-50 px-3 py-2">
-                                <input className={inputCls} value={values[`${key}_name`] || test.testName || ''} onChange={(e) => setVal(`${key}_name`, e.target.value)} />
-                              </td>
-                              <td className="border-b border-gray-50 px-3 py-2">
-                                <input className={inputCls} value={values[`${key}_value`] || ''} onChange={(e) => setVal(`${key}_value`, e.target.value)} placeholder="Enter result" />
-                              </td>
-                              <td className="border-b border-gray-50 px-3 py-2">
-                                <input className={inputCls} value={values[`${key}_unit`] || ''} onChange={(e) => setVal(`${key}_unit`, e.target.value)} />
-                              </td>
-                              <td className="border-b border-gray-50 px-3 py-2">
-                                <input className={inputCls} value={values[`${key}_referenceRange`] || ''} onChange={(e) => setVal(`${key}_referenceRange`, e.target.value)} />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+              {manualEntries.length ? (
+                <div className="mt-4 space-y-2">
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-gray-500">Added Results</p>
+                  {manualEntries.map((entry, idx) => (
+                    <div key={idx} className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-extrabold text-gray-800">{entry.department} → {entry.testName}</span>
+                        <button type="button" onClick={() => setManualEntries((prev) => prev.filter((_, i) => i !== idx))} className="text-xs font-bold text-red-600 hover:text-red-800">Remove</button>
+                      </div>
+                      <div className="text-[11px] text-gray-600">
+                        {entry.rows.filter((r) => String(r.result || '').trim()).map((r, ri) => (
+                          <span key={ri} className="inline-block mr-3">{r.parameter}: <strong className="text-gray-800">{r.result}</strong> {r.unit}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
