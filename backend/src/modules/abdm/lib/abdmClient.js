@@ -136,6 +136,11 @@ async function abdmRequest({
   } catch (err) {
     const statusCode = err.response?.status || 500;
     const responseData = err.response?.data || { message: err.message };
+    console.log('[ABDM][DEBUG] Gateway error response', {
+      statusCode,
+      responseData,
+      responseHeaders: err.response?.headers || null,
+    });
     const durationMs = Date.now() - started;
     const errorCode = responseData?.code || responseData?.error?.code || null;
     const errorMessage =
