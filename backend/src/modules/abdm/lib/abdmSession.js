@@ -6,6 +6,18 @@ const axios = require('axios');
 let tokenStore = null;
 
 const SESSIONS_PATH = '/gateway/v3/sessions';
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function headerNamesFrom(source) {
+  if (!source || typeof source !== 'object') return [];
+  return Object.keys(source);
+}
+
+function envFlag(name) {
+  const raw = process.env[name];
+  return Boolean(raw && String(raw).trim());
+}
 
 function saveToken(token, expiresAt) {
   tokenStore = {
@@ -63,15 +75,34 @@ async function createGatewaySession({ hospitalId = null } = {}) {
   const requestId = headers['REQUEST-ID'];
   const url = `${getGatewayBase()}${SESSIONS_PATH}`;
   const started = Date.now();
+  const requestIdPresent = Boolean(requestId);
+  const timestampPresent = Boolean(headers.TIMESTAMP);
 
-  console.log('[ABDM][DEBUG] Session request runtime', {
-    ABDM_GATEWAY_BASE: abdmConfig.gatewayBase || null,
-    ABDM_CM_ID: headers['X-CM-ID'] || abdmConfig.cmId || null,
-    ABDM_CLIENT_ID: abdmConfig.clientId || null,
-    ABDM_CLIENT_SECRET_present: Boolean(abdmConfig.clientSecret),
-    sessionRequestUrl: url,
-    REQUEST_ID: requestId || null,
+  console.log('[ABDM][DEBUG] Session axios request metadata', {
+    url,
+    method: 'POST',
+    ContentType: headers['Content-Type'] || null,
+    Accept: headers.Accept || null,
+    'X-CM-ID': headers['X-CM-ID'] || null,
+    REQUEST_ID_exists: requestIdPresent,
+    REQUEST_ID_valid_uuid: requestIdPresent && UUID_RE.test(String(requestId)),
+    TIMESTAMP_exists: timestampPresent,
     TIMESTAMP: headers.TIMESTAMP || null,
+    clientIdLength: String(abdmConfig.clientId || '').length,
+    clientSecretPresent: Boolean(abdmConfig.clientSecret),
+    clientSecretLength: String(abdmConfig.clientSecret || '').length,
+    UserAgent: axios.defaults?.headers?.common?.['User-Agent'] || `axios/${axios.VERSION || 'unknown'}`,
+    headerNames: headerNamesFrom(headers),
+    axiosDefaultCommonHeaderNames: headerNamesFrom(axios.defaults?.headers?.common),
+    axiosDefaultPostHeaderNames: headerNamesFrom(axios.defaults?.headers?.post),
+    axiosRequestInterceptorCount: axios.interceptors?.request?.handlers?.length || 0,
+    axiosResponseInterceptorCount: axios.interceptors?.response?.handlers?.length || 0,
+    axiosDefaultProxy: axios.defaults?.proxy ?? null,
+    httpAgentPassed: false,
+    httpsAgentPassed: false,
+    HTTP_PROXY_present: envFlag('HTTP_PROXY') || envFlag('http_proxy'),
+    HTTPS_PROXY_present: envFlag('HTTPS_PROXY') || envFlag('https_proxy'),
+    NO_PROXY_present: envFlag('NO_PROXY') || envFlag('no_proxy'),
   });
 
   console.log('[ABDM][SESSION] Request started');
