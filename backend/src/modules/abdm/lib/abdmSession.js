@@ -64,6 +64,16 @@ async function createGatewaySession({ hospitalId = null } = {}) {
   const url = `${getGatewayBase()}${SESSIONS_PATH}`;
   const started = Date.now();
 
+  console.log('[ABDM][DEBUG] Session request runtime', {
+    ABDM_GATEWAY_BASE: abdmConfig.gatewayBase || null,
+    ABDM_CM_ID: headers['X-CM-ID'] || abdmConfig.cmId || null,
+    ABDM_CLIENT_ID: abdmConfig.clientId || null,
+    ABDM_CLIENT_SECRET_present: Boolean(abdmConfig.clientSecret),
+    sessionRequestUrl: url,
+    REQUEST_ID: requestId || null,
+    TIMESTAMP: headers.TIMESTAMP || null,
+  });
+
   console.log('[ABDM][SESSION] Request started');
   console.log(
     JSON.stringify({
@@ -150,6 +160,9 @@ async function createGatewaySession({ hospitalId = null } = {}) {
       },
     };
   } catch (err) {
+    console.log('[ABDM][DEBUG] Session request failed', {
+      statusCode: err.response?.status || err.status || null,
+    });
     if (err.response?.status && err.response?.data && !err.message?.includes('must be configured')) {
       const statusCode = err.response.status;
       const data = err.response.data;
