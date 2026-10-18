@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { abdmConfig } = require('./abdmConfig');
 const { buildAbdmHeaders } = require('./abdmHeaders');
 const { writeAbdmAudit } = require('./abdmAudit');
@@ -77,6 +78,18 @@ async function createGatewaySession({ hospitalId = null } = {}) {
   const started = Date.now();
   const requestIdPresent = Boolean(requestId);
   const timestampPresent = Boolean(headers.TIMESTAMP);
+
+  console.log('[ABDM][DEBUG] Session credential fingerprint', {
+    clientId: abdmConfig.clientId,
+    clientIdLength: String(abdmConfig.clientId || '').length,
+    clientSecretLength: String(abdmConfig.clientSecret || '').length,
+    clientSecretSha256: crypto
+      .createHash('sha256')
+      .update(abdmConfig.clientSecret)
+      .digest('hex'),
+    cmId: headers['X-CM-ID'] || abdmConfig.cmId || null,
+    gatewayBase: abdmConfig.gatewayBase || null,
+  });
 
   console.log('[ABDM][DEBUG] Session axios request metadata', {
     url,
